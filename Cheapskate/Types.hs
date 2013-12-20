@@ -25,6 +25,9 @@ data ListType = Bullet Char | Numbered NumWrapper Int deriving Show
 data NumWrapper = PeriodFollowing | ParenFollowing | ParensAround
                 deriving (Eq,Show)
 
+-- Simple representation of HTML tag.
+data HtmlTagType = Opening Text | Closing Text | SelfClosing Text deriving Show
+
 -- We operate with sequences instead of lists, because
 -- they allow more efficient appending on to the end.
 type Blocks = Seq Block

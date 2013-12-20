@@ -27,6 +27,10 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:    .
   exposed-modules:   Cheapskate
+  other-modules:     Cheapskate.Blocks
+                     Cheapskate.Parse
+                     Cheapskate.Types
+                     Cheapskate.Render
   build-depends:     base >=4.4 && <4.7,
                      containers >=0.4 && <0.6,
                      mtl >=2.1 && <2.2,

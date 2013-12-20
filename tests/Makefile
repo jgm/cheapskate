@@ -2,7 +2,7 @@ TESTDIR ?= *
 PATT ?= .
 TESTS=$(shell ls $(TESTDIR)/*.markdown | grep $(PATT))
 DIFFS=$(patsubst %.markdown,%.diff,$(TESTS))
-PROG ?= ../dist/build/cheapskate/cheapskate
+PROG ?= ../dist/build/markdown/markdown
 TIDYCMD ?= tidy -asxhtml -utf8 --show-body-only yes --show-warnings no -quiet
 DETAILS ?= 1
 

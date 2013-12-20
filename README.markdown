@@ -2,8 +2,9 @@
 
 This is an experimental Markdown processor.  It aims to process
 Markdown efficiently and in the most forgiving possible way.
-(It is about seven times faster than pandoc---about the same
-as the C library peg-markdown---and uses a fifth the memory.)
+It is about seven times faster than pandoc---about the same
+as the C library peg-markdown---and uses a fifth the memory.
+(A cheapskate is not satisfied with regular markdowns.)
 
 There is no such thing as an invalid Markdown document. Any
 string of characters is valid Markdown.  So the processor should

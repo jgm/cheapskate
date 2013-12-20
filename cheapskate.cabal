@@ -1,0 +1,52 @@
+name:                cheapskate
+version:             0.1.0.0
+synopsis:            Experimental markdown processor.
+description:         This is an experimental markdown parser in Haskell.
+                     It is seven times faster than pandoc (about the same
+                     as the C library peg-markdown) and uses a fifth of the
+                     memory. It is also more forgiving. It allows blockquotes,
+                     headers, indented code blocks, horizontal rules, and
+                     lists to start without a preceding blank line, and it
+                     is more flexible about the indentation of sublists.
+                     .
+                     Several markdown extensions are implemented, including
+                     fenced code blocks and significant list start numbers.
+                     All URLs are made into hyperlinks. See README.markdown
+                     for details.
+homepage:            http://github.com/jgm/cheapskate
+license:             BSD3
+license-file:        LICENSE
+author:              John MacFarlane
+maintainer:          jgm@berkeley.edu
+copyright:           (C) 2012-2013 John MacFarlane
+category:            Text
+build-type:          Simple
+extra-source-files:  README.markdown
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:    .
+  exposed-modules:   Cheapskate
+  build-depends:     base >=4.4 && <4.7,
+                     containers >=0.4 && <0.6,
+                     mtl >=2.1 && <2.2,
+                     network >=2.4 && <2.5,
+                     text >= 0.9 && <1.1,
+                     attoparsec >=0.10 && <0.11,
+                     blaze-html >=0.6 && <0.7
+  default-language:  Haskell2010
+  ghc-options:       -Wall -fno-warn-unused-do-bind
+  ghc-prof-options:  -auto-all -caf-all -rtsopts
+
+executable cheapskate
+  main-is:           cheapskate.hs
+  hs-source-dirs:    bin
+  other-extensions:  OverloadedStrings
+  build-depends:     base >=4.4 && <4.7,
+                     Cheapskate,
+                     bytestring,
+                     blaze-html >=0.6 && <0.7,
+                     text >= 0.9 && <1.1
+  default-language:  Haskell2010
+  ghc-options:       -Wall -fno-warn-unused-do-bind
+  ghc-prof-options:  -auto-all -caf-all -rtsopts

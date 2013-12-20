@@ -1,5 +1,5 @@
 PROG ?= dist/build/markdown/markdown
-BENCHPROGS ?= ../peg-markdown/markdown pandoc Markdown.pl
+BENCHPROGS ?= pandoc Markdown.pl
 .PHONY: prof test bench linecount clean
 
 $(PROG): Cheapskate.hs bin/markdown.hs

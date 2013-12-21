@@ -109,7 +109,8 @@ tryScanners (c:cs) colnum t =
   where scanner = case c of
                        (Container BlockQuote _)  -> scanBlockquoteStart
                        (Container ListItem{ listIndent = n } _) ->
-                                                    () <$ string (T.replicate n " ")
+                                                    scanBlankline
+                                                  <|> () <$ string (T.replicate n " ")
                        _                         -> return ()
 
 containerize :: Text -> ([ContainerType], Leaf)

@@ -94,6 +94,7 @@ containerStart =
 leaf :: Parser Leaf
 leaf =
       (ATXHeader <$> parseAtxHeaderStart <*> (T.dropWhileEnd (`elem` " #") <$> takeText))
+  <|> (Rule <$ scanHRuleLine)
   <|> (BlankLine <$ (skipWhile (==' ') <* endOfInput))
   <|> ((TextLines . Seq.singleton) <$> takeText)
 
@@ -226,10 +227,6 @@ parseAtxHeaderStart = do
   hashes <- takeWhile1 (=='#')
   scanSpace <|> scanBlankline
   return $ T.length hashes
-
--- Scan an ATX header start, including the space.
-scanAtxHeaderStart :: Scanner
-scanAtxHeaderStart = () <$ parseAtxHeaderStart
 
 -- Scan a horizontal rule line: "...three or more hyphens, asterisks,
 -- or underscores on a line by themselves. If you wish, you may use

@@ -141,12 +141,12 @@ processLine (lineNumber, t) = do
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 t
   case ct of
-    IndentedCode | numUnmatched == 0 -> addLeaf lineNumber (TextLine t)
+    IndentedCode | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     FencedCode{ fence = fence } ->
-      if fence `T.isPrefixOf` t
+      if fence `T.isPrefixOf` t'
          -- closing code fence
          then closeContainer
-         else addLeaf lineNumber (TextLine t)
+         else addLeaf lineNumber (TextLine t')
     _ -> case containerize t' of
        ([], TextLine t) ->
          case viewr cs of

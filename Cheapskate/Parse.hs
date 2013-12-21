@@ -35,6 +35,11 @@ data Container = Container{
                    , children      :: Seq Elt
                    }
 
+data ContainerType = Document
+                   | BlockQuote
+                   | ListItem Int {- column number of marker -} ListType
+                   deriving Show
+
 instance Show Container where
   show (Container ct cs) =
     show ct ++ "\n" ++ nest 2 (intercalate "\n" (map showElt $ toList cs))
@@ -46,13 +51,14 @@ showElt :: Elt -> String
 showElt (C c) = show c
 showElt (L lf) = show lf
 
-data ContainerType = Document | BlockQuote
-     deriving Show
-
 data Leaf = TextLine Text
-          | ATXHeader Int Text
-          | Rule
+          | CodeLine Text
           | BlankLine
+          | ATXHeader Int Text
+          | SetextHeader Int Text
+          | HtmlBlock Text
+          | FencedCodeBlock Text Text
+          | Rule
           deriving (Show)
 
 type ContainerM = RWS () ReferenceMap ContainerStack

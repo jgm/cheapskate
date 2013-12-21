@@ -41,7 +41,8 @@ data Container = Container{
 
 data ContainerType = Document
                    | BlockQuote
-                   | ListItem ColumnNumber ListType
+                   | ListItem { columnNumber :: ColumnNumber, listType :: ListType }
+                   | FencedCodeBlock { openFence :: Text, infoText :: Text, codeLines :: Seq Text }
                    deriving Show
 
 instance Show Container where
@@ -56,12 +57,10 @@ showElt (C c) = show c
 showElt (L _ lf) = show lf
 
 data Leaf = TextLine Text
-          | CodeLine Text
           | BlankLine
           | ATXHeader Int Text
           | SetextHeader Int Text
           | HtmlBlock Text
-          | FencedCodeBlock Text Text
           | Rule
           deriving (Show)
 

@@ -124,6 +124,7 @@ containerStart =
 leaf :: Parser Leaf
 leaf =
       (ATXHeader <$> parseAtxHeaderStart <*> (T.dropWhileEnd (`elem` " #") <$> takeText))
+  <|> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty)
   <|> (Rule <$ scanHRuleLine)
   <|> (BlankLine <$ (skipWhile (==' ') <* endOfInput))
   <|> (TextLine <$> takeText)
@@ -137,6 +138,11 @@ processLine (lineNumber, t) = do
            case viewr cs of
               -- lazy continuation?
              (cs' :> L _ (TextLine _)) -> addLeaf lineNumber (TextLine t)
+             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
+       ([], SetextHeader lev _) | numUnmatched == 0 ->
+           case viewr cs of
+             (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
+               put (Container ct (cs' |> L lineNumber (SetextHeader lev t)) : rest)
              _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
        (ns, lf) -> do -- close unmatched containers, add new ones
            replicateM numUnmatched closeContainer
@@ -257,6 +263,14 @@ parseAtxHeaderStart = do
   hashes <- takeWhile1 (=='#')
   scanSpace <|> scanBlankline
   return $ T.length hashes
+
+parseSetextHeaderLine :: Parser Int
+parseSetextHeaderLine = do
+  d <- char '-' <|> char '='
+  let lev = if d == '=' then 1 else 2
+  many (char d)
+  scanBlankline
+  return lev
 
 -- Scan a horizontal rule line: "...three or more hyphens, asterisks,
 -- or underscores on a line by themselves. If you wish, you may use

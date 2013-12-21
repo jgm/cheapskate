@@ -44,13 +44,12 @@ nest num = intercalate "\n" . map ((replicate num ' ') ++) . lines
 
 showElt :: Elt -> String
 showElt (C c) = show c
-showElt (L (TextLines ls)) = "TextLines " ++ show (toList ls)
 showElt (L lf) = show lf
 
 data ContainerType = Document | BlockQuote
      deriving Show
 
-data Leaf = TextLines (Seq Text)
+data Leaf = TextLine Text
           | ATXHeader Int Text
           | Rule
           | BlankLine
@@ -83,10 +82,10 @@ addLeaf :: Leaf -> ContainerM ()
 addLeaf lf = do
   (top:rest) <- get
   put $ case (top, lf) of
-        (Container ct cs, TextLines t) ->
+        (Container ct cs, TextLine t) ->
           case viewr cs of
-            (cs' :> L (TextLines t')) -> Container ct (cs' |> L (TextLines (t' >< t))) : rest
-            _ -> Container ct (cs |> L (TextLines t)) : rest
+            (cs' :> L (TextLine _)) -> Container ct (cs |> L lf) : rest
+            _ -> Container ct (cs |> L lf) : rest
         (Container ct cs, c) -> Container ct (cs |> L c) : rest
 
 addContainer :: Container -> ContainerM ()
@@ -117,18 +116,18 @@ leaf =
       (ATXHeader <$> parseAtxHeaderStart <*> (T.dropWhileEnd (`elem` " #") <$> takeText))
   <|> (Rule <$ scanHRuleLine)
   <|> (BlankLine <$ (skipWhile (==' ') <* endOfInput))
-  <|> ((TextLines . Seq.singleton) <$> takeText)
+  <|> (TextLine <$> takeText)
 
 processLine :: Text -> ContainerM ()
 processLine t = do
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) t
   case containerize t' of
-       ([], TextLines nt) ->
+       ([], TextLine t) ->
            case viewr cs of
               -- lazy continuation?
-             (cs' :> L (TextLines _)) -> addLeaf (TextLines nt)
-             _ -> replicateM numUnmatched closeContainer >> addLeaf (TextLines nt)
+             (cs' :> L (TextLine _)) -> addLeaf (TextLine t)
+             _ -> replicateM numUnmatched closeContainer >> addLeaf (TextLine t)
        (ns, lf) -> do -- close unmatched containers, add new ones
            replicateM numUnmatched closeContainer
            mapM_ addContainer ns

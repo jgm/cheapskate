@@ -1,13 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cheapskate.Blocks (Container(..), parseContainers) where
+module Cheapskate.Blocks (Container(..), processLines) where
 import Data.Char
 import qualified Data.Set as Set
 import Prelude hiding (takeWhile)
 import Data.Attoparsec.Text
-import Data.List (foldl')
+import Data.List (foldl', intercalate)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid
+import Data.Foldable (toList)
 import Data.Sequence (Seq, (|>), (><), viewr, ViewR(..))
 import qualified Data.Sequence as Seq
 import Control.Monad.RWS
@@ -30,7 +31,18 @@ data Container = Container{
                      containerType :: ContainerType
                    , children      :: Seq Elt
                    }
-                 deriving Show
+
+instance Show Container where
+  show (Container ct cs) =
+    show ct ++ "\n" ++ nest 2 (intercalate "\n" (map showElt $ toList cs))
+
+nest :: Int -> String -> String
+nest num = intercalate "\n" . map ((replicate num ' ') ++) . lines
+
+showElt :: Elt -> String
+showElt (C c) = show c
+showElt (L (TextLines ls)) = "TextLines " ++ show (toList ls)
+showElt (L lf) = show lf
 
 data ContainerType = Document | BlockQuote
      deriving Show
@@ -43,20 +55,26 @@ data Leaf = TextLines (Seq Text)
 
 type ContainerM = RWS () ReferenceMap ContainerStack
 
-parseContainers :: Text -> (Container, ReferenceMap)
-parseContainers t = (closeStack stack, refmap)
+processLines :: Text -> (Container, ReferenceMap)
+processLines t = (doc, refmap)
   where
-  (stack, refmap) = execRWS (mapM_ processLine $ toLines t) () startState
+  (doc, refmap) = evalRWS (mapM_ processLine (toLines t) >> closeStack) () startState
   toLines    = map tabFilter . T.lines
   startState = [Container Document mempty]
 
-addChild :: Container -> Container -> Container
-addChild child (Container ct cs) = Container ct (cs |> C child)
+closeStack :: ContainerM Container
+closeStack = do
+  (top:rest) <- get
+  if null rest
+     then return top
+     else closeContainer >> closeStack
 
-closeStack :: ContainerStack -> Container
-closeStack []       = error "empty stack"
-closeStack [x]      = x
-closeStack (x:y:zs) = closeStack (addChild x y : zs)
+closeContainer :: ContainerM ()
+closeContainer = do
+  (top:rest) <- get
+  case rest of
+       (Container ct' cs' : rs) -> put $ Container ct' (cs' |> C top) : rs
+       [] -> fail "Cannot close last container on stack"
 
 addLeaf :: Leaf -> ContainerM ()
 addLeaf lf = do
@@ -107,9 +125,9 @@ processLine t = do
            case viewr cs of
               -- lazy continuation?
              (cs' :> L (TextLines _)) -> addLeaf (TextLines nt)
-             _ -> modify (drop numUnmatched) >> addLeaf (TextLines nt)
+             _ -> replicateM numUnmatched closeContainer >> addLeaf (TextLines nt)
        (ns, lf) -> do -- close unmatched containers, add new ones
-           modify $ drop numUnmatched
+           replicateM numUnmatched closeContainer
            mapM_ addContainer ns
            addLeaf lf
 

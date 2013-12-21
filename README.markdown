@@ -58,9 +58,9 @@ The starting number of an ordered list is now significant.
 Other numbers are ignored, so you can still use `1.` for each
 list item.
 
-In addition to the `1.` form, you can use `1)` or `(1)` in
-your ordered lists.  A new list starts if you change the
-form of the delimiter. So, the following is two lists:
+In addition to the `1.` form, you can use `1)` in your ordered lists.
+A new list starts if you change the form of the delimiter. So, the
+following is two lists:
 
     1. one
     2. two

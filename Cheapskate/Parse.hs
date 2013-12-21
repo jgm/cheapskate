@@ -41,8 +41,8 @@ data Container = Container{
 
 data ContainerType = Document
                    | BlockQuote
-                   | ListItem { columnNumber :: ColumnNumber, listType :: ListType }
-                   | FencedCode { openFence :: (Text, Text) }
+                   | ListItem { listIndent :: Int, listType :: ListType }
+                   | FencedCode { fence :: Text, info :: Text }
                    deriving Show
 
 instance Show Container where
@@ -97,8 +97,8 @@ addLeaf lineNum lf = do
             _ -> Container ct (cs |> L lineNum lf) : rest
         (Container ct cs, c) -> Container ct (cs |> L lineNum c) : rest
 
-addContainer :: Container -> ContainerM ()
-addContainer cont = modify (cont:)
+addContainer :: ContainerType -> ContainerM ()
+addContainer ct = modify (Container ct mempty :)
 
 tryScanners :: [Container] -> ColumnNumber -> Text -> (Text, Int)
 tryScanners [] _ t = (t, 0)
@@ -108,20 +108,21 @@ tryScanners (c:cs) colnum t =
        Left _err  -> (t, length (c:cs))
   where scanner = case c of
                        (Container BlockQuote _)  -> scanBlockquoteStart
-                       (Container ListItem{ columnNumber = n } _) -> guard (colnum >= n)
+                       (Container ListItem{ listIndent = n } _) ->
+                                                    () <$ string (T.replicate n " ")
                        _                         -> return ()
 
-containerize :: Text -> ([Container], Leaf)
+containerize :: Text -> ([ContainerType], Leaf)
 containerize t =
   case parseOnly ((,) <$> many containerStart <*> leaf) t of
        Right (cs,t') -> (cs,t')
        Left err      -> error err
 
-containerStart :: Parser Container
+containerStart :: Parser ContainerType
 containerStart =
-      (Container BlockQuote mempty <$ scanBlockquoteStart)
-  <|> (do ct <- FencedCode <$> parseCodeFence
-          return (Container ct mempty))
+      (BlockQuote <$ scanBlockquoteStart)
+  <|> parseListMarker
+  <|> parseCodeFence
 
 leaf :: Parser Leaf
 leaf =
@@ -136,7 +137,7 @@ processLine (lineNumber, t) = do
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 t
   case ct of
-    FencedCode{ openFence = (fence,_) } ->
+    FencedCode{ fence = fence } ->
       if fence `T.isPrefixOf` t
          -- closing code fence
          then closeContainer
@@ -157,7 +158,7 @@ processLine (lineNumber, t) = do
            mapM_ addContainer ns
            case (reverse ns, lf) of
              -- don't add blank line at beginning of fenced code block
-             (Container FencedCode{} _ : _, BlankLine) -> return ()
+             (FencedCode{}:_,  BlankLine) -> return ()
              _ -> addLeaf lineNumber lf
 
 -- Utility functions.
@@ -222,6 +223,13 @@ scanNonindentSpaces :: Scanner
 scanNonindentSpaces = do
   xs <- takeWhile (==' ')
   if T.length xs > 3 then mzero else return ()
+
+parseNonindentSpaces :: Parser Int
+parseNonindentSpaces = do
+  xs <- takeWhile (==' ')
+  case T.length xs of
+       n | n > 3 -> mzero
+         | otherwise -> return n
 
 -- Scan a specified character.
 scanChar :: Char -> Scanner
@@ -296,7 +304,7 @@ scanHRuleLine = do
 
 -- Parse an initial code fence line, returning
 -- the fence part and the rest (after any spaces).
-parseCodeFence :: Parser (Text, Text)
+parseCodeFence :: Parser ContainerType
 parseCodeFence = do
   c <- satisfy $ inClass "`~"
   count 2 (char c)
@@ -304,7 +312,7 @@ parseCodeFence = do
   scanSpaces
   rawattr <- takeWhile (/='`')
   endOfInput
-  return (T.pack [c,c,c] <> extra, rawattr)
+  return $ FencedCode { fence = T.pack [c,c,c] <> extra, info = rawattr }
 
 -- Scan the start of an HTML block:  either an HTML tag or an
 -- HTML comment, with no indentation.
@@ -316,53 +324,30 @@ scanHtmlBlockStart = (   (pHtmlTag >>= guard . f . fst)
         f (SelfClosing name) = name `Set.member` blockHtmlTags
         f (Closing name) = name `Set.member` blockHtmlTags
 
--- Scan the start of a list. If the parameter is Nothing, allow
--- any bullet or list number marker indented no more than 3 spaces.
--- If it is Just listType, then only succeed if the marker is
--- of the appropriate type.  (It must match bullet and number
--- wrapping style, but not the number itself.)
-scanListStart :: Maybe ListType -> Parser ()
-scanListStart Nothing = () <$ parseListMarker
-scanListStart (Just (Bullet   c)) = do
-  marker <- parseBullet
-  case marker of
-        Bullet c' | c == c' -> return ()
-        _                   -> fail "Change in list style"
-scanListStart (Just (Numbered w _)) = do
-  marker <- parseListNumber
-  case marker of
-        Numbered w' _ | w == w' -> return ()
-        _                       -> fail "Change in list style"
-
 -- Parse a list marker and return the list type.
-parseListMarker :: Parser ListType
+parseListMarker :: Parser ContainerType
 parseListMarker = parseBullet <|> parseListNumber
 
 -- Parse a bullet and return list type.
-parseBullet :: Parser ListType
+parseBullet :: Parser ContainerType
 parseBullet = do
+  ind <- parseNonindentSpaces
   c <- satisfy $ inClass "+*-"
   scanSpace <|> scanBlankline -- allow empty list item
   unless (c == '+')
     $ nfb $ (count 2 $ scanSpaces >> skip (== c)) >>
           skipWhile (\x -> x == ' ' || x == c) >> endOfInput -- hrule
-  return $ Bullet c
+  return $ ListItem { listType = Bullet c, listIndent = ind + 1 }
 
 -- Parse a list number marker and return list type.
-parseListNumber :: Parser ListType
-parseListNumber =
-  (parseListNumberDig <|> parseListNumberPar) <*
-     (scanSpace <|> scanBlankline)
-  where parseListNumberDig = do
-           num <- decimal  -- a string of decimal digits
-           wrap <-  PeriodFollowing <$ skip (== '.')
-                <|> ParenFollowing <$ skip (== ')')
-           return $ Numbered wrap num
-        parseListNumberPar = do
-           skip (== '(')
-           num <- decimal
-           skip (== ')')
-           return $ Numbered ParensAround num
+parseListNumber :: Parser ContainerType
+parseListNumber = do
+    ind <- parseNonindentSpaces
+    num <- decimal  -- a string of decimal digits
+    wrap <-  PeriodFollowing <$ skip (== '.')
+         <|> ParenFollowing <$ skip (== ')')
+    scanSpace <|> scanBlankline
+    return $ ListItem { listType = Numbered wrap num, listIndent = ind + length (show num) + 1 }
 
 -- Scan the beginning of a reference block: a bracketed label
 -- followed by a colon.  We assume that the label is on one line.

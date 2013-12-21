@@ -8,7 +8,7 @@ import Data.List (foldl')
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid
-import Data.Sequence (Seq, (|>), (><))
+import Data.Sequence (Seq, (|>), (><), viewr, ViewR(..))
 import qualified Data.Sequence as Seq
 import Control.Monad.RWS
 import Control.Monad
@@ -17,6 +17,7 @@ import Cheapskate.Types
 import Control.Applicative
 
 import Debug.Trace
+tr' s x = trace (s ++ ": " ++ show x) x
 
 type ContainerStack = [Container]
 
@@ -46,60 +47,62 @@ parseContainers t = (closeStack stack, refmap)
 
 addChild :: Container -> Container -> Container
 addChild child (Container ct cs) = Container ct (cs |> child)
-addChild child c             = error $ "Tried to add child to a leaf container: " ++ show c
+addChild child c             = error "leaf container cannot have children"
 
 closeStack :: ContainerStack -> Container
 closeStack []       = error "empty stack"
 closeStack [x]      = x
 closeStack (x:y:zs) = closeStack (addChild x y : zs)
 
-containerScanner :: Container -> Scanner
-containerScanner (Container ct _) =
-  case ct of
-    BlockQuote -> scanBlockquoteStart
-    _          -> return ()
-containerScanner _ = return ()
+addToStack :: Container -> ContainerM ()
+addToStack cont = do
+  (top:rest) <- get
+  put $ case (top, cont) of
+        -- top should always be Container
+        (Container ct cs, Container ct' cs') -> Container ct' cs' : Container ct cs : rest
+        (Container ct cs, TextLines t) ->
+          case viewr cs of
+            (cs' :> TextLines t') -> Container ct (cs' |> TextLines (t' >< t)) : rest
+            _ -> Container ct (cs |> TextLines t) : rest
+        (Container ct cs, c) -> Container ct (cs |> c) : rest
+        _ -> error "top of stack must be a Container"
 
-doScanners :: [Container] -> Text -> (Text, [Container])
-doScanners [] t = (t, [])
-doScanners (c:cs) t =
-  case parseOnly (containerScanner c >> takeText) t of
-       Right t'   -> doScanners cs t'
-       Left _err  -> (t, c:cs)
+tryScanners :: [Container] -> Text -> (Text, Int)
+tryScanners [] t = (t, 0)
+tryScanners (c:cs) t =
+  case parseOnly (scanner >> takeText) t of
+       Right t'   -> tryScanners cs t'
+       Left _err  -> (t, length (c:cs))
+  where scanner = case c of
+                       (Container BlockQuote _)  -> scanBlockquoteStart
+                       _                         -> return ()
 
 containerize :: Text -> [Container]
 containerize t =
-  case parseOnly ((,) <$> many blockScanners <*> takeText) t of
+  case parseOnly ((,) <$> many blockStart <*> takeText) t of
        Right (cs,t') -> cs ++ if isEmptyLine t'
                                  then [BlankLine]
                                  else [TextLines $ Seq.singleton t']
        Left err      -> error err
 
-blockScanners :: Parser Container
-blockScanners =
-  (Container BlockQuote mempty <$ scanBlockquoteStart)
+blockStart :: Parser Container
+blockStart =
+     (Container BlockQuote mempty <$ scanBlockquoteStart)
+ <|> (ATXHeader <$> parseAtxHeaderStart <*> (T.dropWhileEnd (`elem` " #") <$> takeText))
 
 processLine :: Text -> ContainerM ()
 processLine t = do
-  (top:rest) <- get  -- assumes stack is never empty
-  let (t', unmatchedContainers) = doScanners (reverse $ top:rest) t
-  let newContainers = containerize t'
-  case (reverse unmatchedContainers, reverse newContainers, top) of
-       (_, [TextLines nt], TextLines ot) ->  -- lazy continuation
-           put (TextLines (ot >< nt) : rest)
-       ([], new, Container _ _) -> -- open new containers
-           put (new ++ (top:rest))
-       ([], new, _) -> -- top is not a container, so don't bury it on stack
-           put (new ++ case rest of
-                            (r:rs) -> addChild top r : rs
-                            []     -> error "shouldn't happen: stack has only leaf node")
-       (unmatched, new, _) -> -- close unmatched containers, open new ones
-           case drop (length unmatched) (top:rest) of
-                  []     -> error "no matched blocks"
-                  (Container ct cs : xs) -> put (new ++ (Container ct (cs |> closeStack unmatched) : xs))
-                  _      -> error "shouldn't happen: leaf node not at top of stack"
-  -- s <- get
-  -- trace (show s) (return ())
+  (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
+  let (t', numUnmatched) = tryScanners (reverse $ top:rest) t
+  case containerize t' of
+       [TextLines nt] ->
+           case viewr cs of
+              -- lazy continuation?
+             (cs' :> TextLines ot) -> addToStack (TextLines nt)
+             _ -> modify (drop numUnmatched) >> addToStack (TextLines nt)
+       ns -> do -- close unmatched containers, add new ones
+           modify $ drop numUnmatched
+           mapM_ addToStack ns
 
 -- Utility functions.
 
@@ -160,12 +163,9 @@ scanIndentSpace = () <$ count 4 (skip (==' '))
 
 -- Scan 0-3 spaces.
 scanNonindentSpaces :: Scanner
-scanNonindentSpaces =
-  (scanChar ' ' >>
-    (scanChar ' ' >>
-      (scanChar ' ' <|> return ())
-    ) <|> return ()
-  ) <|> return ()
+scanNonindentSpaces = do
+  xs <- takeWhile (==' ')
+  if T.length xs > 3 then mzero else return ()
 
 -- Scan a specified character.
 scanChar :: Char -> Scanner

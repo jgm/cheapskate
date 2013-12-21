@@ -1,8 +1,9 @@
 PROG ?= dist/build/markdown/markdown
 BENCHPROGS ?= pandoc Markdown.pl
+SOURCES=Cheapskate.hs Cheapskate/Blocks.hs Cheapskate/Parse.hs Cheapskate/Types.hs Cheapskate/Render.hs bin/markdown.hs
 .PHONY: prof test bench linecount clean
 
-$(PROG): Cheapskate.hs bin/markdown.hs
+$(PROG): $(SOURCES)
 	cabal configure --user && cabal build
 
 prof:

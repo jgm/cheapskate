@@ -27,7 +27,11 @@ type ContainerStack = [Container]
 
 type ReferenceMap = M.Map Text (Text, Text)
 
-data Elt = C Container | L Leaf
+type ColumnNumber = Int
+type LineNumber   = Int
+
+data Elt = C Container
+         | L LineNumber Leaf
          deriving Show
 
 data Container = Container{
@@ -37,7 +41,7 @@ data Container = Container{
 
 data ContainerType = Document
                    | BlockQuote
-                   | ListItem Int {- column number of marker -} ListType
+                   | ListItem ColumnNumber ListType
                    deriving Show
 
 instance Show Container where
@@ -49,7 +53,7 @@ nest num = intercalate "\n" . map ((replicate num ' ') ++) . lines
 
 showElt :: Elt -> String
 showElt (C c) = show c
-showElt (L lf) = show lf
+showElt (L _ lf) = show lf
 
 data Leaf = TextLine Text
           | CodeLine Text
@@ -66,8 +70,8 @@ type ContainerM = RWS () ReferenceMap ContainerStack
 processLines :: Text -> (Container, ReferenceMap)
 processLines t = (doc, refmap)
   where
-  (doc, refmap) = evalRWS (mapM_ processLine (toLines t) >> closeStack) () startState
-  toLines    = map tabFilter . T.lines
+  (doc, refmap) = evalRWS (mapM_ processLine lns >> closeStack) () startState
+  lns        = zip [1..] (map tabFilter $ T.lines t)
   startState = [Container Document mempty]
 
 closeStack :: ContainerM Container
@@ -84,15 +88,15 @@ closeContainer = do
        (Container ct' cs' : rs) -> put $ Container ct' (cs' |> C top) : rs
        [] -> fail "Cannot close last container on stack"
 
-addLeaf :: Leaf -> ContainerM ()
-addLeaf lf = do
+addLeaf :: LineNumber -> Leaf -> ContainerM ()
+addLeaf lineNum lf = do
   (top:rest) <- get
   put $ case (top, lf) of
         (Container ct cs, TextLine t) ->
           case viewr cs of
-            (cs' :> L (TextLine _)) -> Container ct (cs |> L lf) : rest
-            _ -> Container ct (cs |> L lf) : rest
-        (Container ct cs, c) -> Container ct (cs |> L c) : rest
+            (cs' :> L _ (TextLine _)) -> Container ct (cs |> L lineNum lf) : rest
+            _ -> Container ct (cs |> L lineNum lf) : rest
+        (Container ct cs, c) -> Container ct (cs |> L lineNum c) : rest
 
 addContainer :: Container -> ContainerM ()
 addContainer cont = modify (cont:)
@@ -124,20 +128,20 @@ leaf =
   <|> (BlankLine <$ (skipWhile (==' ') <* endOfInput))
   <|> (TextLine <$> takeText)
 
-processLine :: Text -> ContainerM ()
-processLine t = do
+processLine :: (LineNumber, Text) -> ContainerM ()
+processLine (lineNumber, t) = do
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) t
   case containerize t' of
        ([], TextLine t) ->
            case viewr cs of
               -- lazy continuation?
-             (cs' :> L (TextLine _)) -> addLeaf (TextLine t)
-             _ -> replicateM numUnmatched closeContainer >> addLeaf (TextLine t)
+             (cs' :> L _ (TextLine _)) -> addLeaf lineNumber (TextLine t)
+             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
        (ns, lf) -> do -- close unmatched containers, add new ones
            replicateM numUnmatched closeContainer
            mapM_ addContainer ns
-           addLeaf lf
+           addLeaf lineNumber lf
 
 -- Utility functions.
 

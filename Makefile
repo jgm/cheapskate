@@ -1,6 +1,6 @@
 PROG ?= dist/build/markdown/markdown
 BENCHPROGS ?= pandoc Markdown.pl
-SOURCES=Cheapskate.hs Cheapskate/Blocks.hs Cheapskate/Parse.hs Cheapskate/Types.hs Cheapskate/Render.hs bin/markdown.hs
+SOURCES=Cheapskate.hs Cheapskate/Parse.hs Cheapskate/Types.hs Cheapskate/Render.hs bin/markdown.hs
 .PHONY: prof test bench linecount clean
 
 $(PROG): $(SOURCES)

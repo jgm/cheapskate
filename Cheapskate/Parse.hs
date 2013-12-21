@@ -42,7 +42,7 @@ data Container = Container{
 data ContainerType = Document
                    | BlockQuote
                    | ListItem { columnNumber :: ColumnNumber, listType :: ListType }
-                   | FencedCodeBlock { openFence :: Text, infoText :: Text, codeLines :: Seq Text }
+                   | FencedCode { openFence :: (Text, Text) }
                    deriving Show
 
 instance Show Container where
@@ -118,7 +118,9 @@ containerize t =
 
 containerStart :: Parser Container
 containerStart =
-     (Container BlockQuote mempty <$ scanBlockquoteStart)
+      (Container BlockQuote mempty <$ scanBlockquoteStart)
+  <|> (do ct <- FencedCode <$> parseCodeFence
+          return (Container ct mempty))
 
 leaf :: Parser Leaf
 leaf =
@@ -132,12 +134,18 @@ processLine :: (LineNumber, Text) -> ContainerM ()
 processLine (lineNumber, t) = do
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) t
-  case containerize t' of
+  case ct of
+    FencedCode{ openFence = (fence,_) } ->
+      if fence `T.isPrefixOf` t
+         -- closing code fence
+         then closeContainer
+         else addLeaf lineNumber (TextLine t)
+    _ -> case containerize t' of
        ([], TextLine t) ->
-           case viewr cs of
-              -- lazy continuation?
-             (cs' :> L _ (TextLine _)) -> addLeaf lineNumber (TextLine t)
-             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
+         case viewr cs of
+            -- lazy continuation?
+            (cs' :> L _ (TextLine _)) -> addLeaf lineNumber (TextLine t)
+            _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
        ([], SetextHeader lev _) | numUnmatched == 0 ->
            case viewr cs of
              (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
@@ -146,7 +154,10 @@ processLine (lineNumber, t) = do
        (ns, lf) -> do -- close unmatched containers, add new ones
            replicateM numUnmatched closeContainer
            mapM_ addContainer ns
-           addLeaf lineNumber lf
+           case (reverse ns, lf) of
+             -- don't add blank line at beginning of fenced code block
+             (Container FencedCode{} _ : _, BlankLine) -> return ()
+             _ -> addLeaf lineNumber lf
 
 -- Utility functions.
 
@@ -282,14 +293,10 @@ scanHRuleLine = do
   skipWhile (\x -> x == ' ' || x == c)
   endOfInput
 
--- Scan a code fence line.
-scanCodeFenceLine :: Scanner
-scanCodeFenceLine = () <$ codeFenceParserLine
-
 -- Parse an initial code fence line, returning
 -- the fence part and the rest (after any spaces).
-codeFenceParserLine :: Parser (Text, Text)
-codeFenceParserLine = do
+parseCodeFence :: Parser (Text, Text)
+parseCodeFence = do
   c <- satisfy $ inClass "`~"
   count 2 (char c)
   extra <- takeWhile (== c)

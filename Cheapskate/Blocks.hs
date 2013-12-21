@@ -23,18 +23,23 @@ type ContainerStack = [Container]
 
 type ReferenceMap = M.Map Text (Text, Text)
 
+data Elt = C Container | L Leaf
+         deriving Show
+
 data Container = Container{
                      containerType :: ContainerType
-                   , children      :: Seq Container
+                   , children      :: Seq Elt
                    }
-                | TextLines (Seq Text)
-                | ATXHeader Int Text
-                | Rule
-                | BlankLine
-                deriving (Show)
+                 deriving Show
 
 data ContainerType = Document | BlockQuote
      deriving Show
+
+data Leaf = TextLines (Seq Text)
+          | ATXHeader Int Text
+          | Rule
+          | BlankLine
+          deriving (Show)
 
 type ContainerM = RWS () ReferenceMap ContainerStack
 
@@ -46,26 +51,25 @@ parseContainers t = (closeStack stack, refmap)
   startState = [Container Document mempty]
 
 addChild :: Container -> Container -> Container
-addChild child (Container ct cs) = Container ct (cs |> child)
-addChild child c             = error "leaf container cannot have children"
+addChild child (Container ct cs) = Container ct (cs |> C child)
 
 closeStack :: ContainerStack -> Container
 closeStack []       = error "empty stack"
 closeStack [x]      = x
 closeStack (x:y:zs) = closeStack (addChild x y : zs)
 
-addToStack :: Container -> ContainerM ()
-addToStack cont = do
+addLeaf :: Leaf -> ContainerM ()
+addLeaf lf = do
   (top:rest) <- get
-  put $ case (top, cont) of
-        -- top should always be Container
-        (Container ct cs, Container ct' cs') -> Container ct' cs' : Container ct cs : rest
+  put $ case (top, lf) of
         (Container ct cs, TextLines t) ->
           case viewr cs of
-            (cs' :> TextLines t') -> Container ct (cs' |> TextLines (t' >< t)) : rest
-            _ -> Container ct (cs |> TextLines t) : rest
-        (Container ct cs, c) -> Container ct (cs |> c) : rest
-        _ -> error "top of stack must be a Container"
+            (cs' :> L (TextLines t')) -> Container ct (cs' |> L (TextLines (t' >< t))) : rest
+            _ -> Container ct (cs |> L (TextLines t)) : rest
+        (Container ct cs, c) -> Container ct (cs |> L c) : rest
+
+addContainer :: Container -> ContainerM ()
+addContainer cont = modify (cont:)
 
 tryScanners :: [Container] -> Text -> (Text, Int)
 tryScanners [] t = (t, 0)
@@ -77,32 +81,36 @@ tryScanners (c:cs) t =
                        (Container BlockQuote _)  -> scanBlockquoteStart
                        _                         -> return ()
 
-containerize :: Text -> [Container]
+containerize :: Text -> ([Container], Leaf)
 containerize t =
-  case parseOnly ((,) <$> many blockStart <*> takeText) t of
-       Right (cs,t') -> cs ++ if isEmptyLine t'
-                                 then [BlankLine]
-                                 else [TextLines $ Seq.singleton t']
+  case parseOnly ((,) <$> many containerStart <*> leaf) t of
+       Right (cs,t') -> (cs,t')
        Left err      -> error err
 
-blockStart :: Parser Container
-blockStart =
+containerStart :: Parser Container
+containerStart =
      (Container BlockQuote mempty <$ scanBlockquoteStart)
- <|> (ATXHeader <$> parseAtxHeaderStart <*> (T.dropWhileEnd (`elem` " #") <$> takeText))
+
+leaf :: Parser Leaf
+leaf =
+      (ATXHeader <$> parseAtxHeaderStart <*> (T.dropWhileEnd (`elem` " #") <$> takeText))
+  <|> (BlankLine <$ (skipWhile (==' ') <* endOfInput))
+  <|> ((TextLines . Seq.singleton) <$> takeText)
 
 processLine :: Text -> ContainerM ()
 processLine t = do
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) t
   case containerize t' of
-       [TextLines nt] ->
+       ([], TextLines nt) ->
            case viewr cs of
               -- lazy continuation?
-             (cs' :> TextLines ot) -> addToStack (TextLines nt)
-             _ -> modify (drop numUnmatched) >> addToStack (TextLines nt)
-       ns -> do -- close unmatched containers, add new ones
+             (cs' :> L (TextLines _)) -> addLeaf (TextLines nt)
+             _ -> modify (drop numUnmatched) >> addLeaf (TextLines nt)
+       (ns, lf) -> do -- close unmatched containers, add new ones
            modify $ drop numUnmatched
-           mapM_ addToStack ns
+           mapM_ addContainer ns
+           addLeaf lf
 
 -- Utility functions.
 

@@ -1,3 +1,10 @@
 - Don't allow lists to start after a paragraph line.
   Too easy to capture numbers at end of sentence, etc.
 
+- separate container for indented code -- otherwise we
+  get weird results for lazy lines
+
+- handle reference definitions
+
+- add in inline parsing and rendering
+

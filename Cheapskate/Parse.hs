@@ -43,6 +43,7 @@ data ContainerType = Document
                    | BlockQuote
                    | ListItem { listIndent :: Int, listType :: ListType }
                    | FencedCode { fence :: Text, info :: Text }
+                   | IndentedCode
                    deriving Show
 
 instance Show Container where
@@ -106,12 +107,13 @@ tryScanners (c:cs) colnum t =
   case parseOnly (scanner >> takeText) t of
        Right t'   -> tryScanners cs (colnum + T.length t - T.length t') t'
        Left _err  -> (t, length (c:cs))
-  where scanner = case c of
-                       (Container BlockQuote _)  -> scanBlockquoteStart
-                       (Container ListItem{ listIndent = n } _) ->
-                                                    scanBlankline
-                                                  <|> () <$ string (T.replicate n " ")
-                       _                         -> return ()
+  where scanner = case containerType c of
+                       BlockQuote    -> scanBlockquoteStart
+                       IndentedCode  -> scanIndentSpace
+                       ListItem{ listIndent = n }
+                                     -> scanBlankline
+                                      <|> () <$ string (T.replicate n " ")
+                       _              -> return ()
 
 containerize :: Text -> ([ContainerType], Leaf)
 containerize t =
@@ -124,6 +126,7 @@ containerStart =
       (BlockQuote <$ scanBlockquoteStart)
   <|> parseListMarker
   <|> parseCodeFence
+  <|> (IndentedCode <$ scanIndentSpace)
 
 leaf :: Parser Leaf
 leaf =
@@ -138,6 +141,7 @@ processLine (lineNumber, t) = do
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 t
   case ct of
+    IndentedCode | numUnmatched == 0 -> addLeaf lineNumber (TextLine t)
     FencedCode{ fence = fence } ->
       if fence `T.isPrefixOf` t
          -- closing code fence

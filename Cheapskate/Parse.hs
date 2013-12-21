@@ -100,14 +100,15 @@ addLeaf lineNum lf = do
 addContainer :: Container -> ContainerM ()
 addContainer cont = modify (cont:)
 
-tryScanners :: [Container] -> Text -> (Text, Int)
-tryScanners [] t = (t, 0)
-tryScanners (c:cs) t =
+tryScanners :: [Container] -> ColumnNumber -> Text -> (Text, Int)
+tryScanners [] _ t = (t, 0)
+tryScanners (c:cs) colnum t =
   case parseOnly (scanner >> takeText) t of
-       Right t'   -> tryScanners cs t'
+       Right t'   -> tryScanners cs (colnum + T.length t - T.length t') t'
        Left _err  -> (t, length (c:cs))
   where scanner = case c of
                        (Container BlockQuote _)  -> scanBlockquoteStart
+                       (Container ListItem{ columnNumber = n } _) -> guard (colnum >= n)
                        _                         -> return ()
 
 containerize :: Text -> ([Container], Leaf)
@@ -133,7 +134,7 @@ leaf =
 processLine :: (LineNumber, Text) -> ContainerM ()
 processLine (lineNumber, t) = do
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
-  let (t', numUnmatched) = tryScanners (reverse $ top:rest) t
+  let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 t
   case ct of
     FencedCode{ openFence = (fence,_) } ->
       if fence `T.isPrefixOf` t

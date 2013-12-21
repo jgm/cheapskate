@@ -1,10 +1,10 @@
-- Don't allow lists to start after a paragraph line.
-  Too easy to capture numbers at end of sentence, etc.
+- processLines:
+  - handle reference definitions
+  - handle raw html blocks
+  - don't allow lists to start after a paragraph line.
+    Too easy to capture numbers at end of sentence, etc.
 
-- separate container for indented code -- otherwise we
-  get weird results for lazy lines
-
-- handle reference definitions
+- code to take output of processLines and create AST
 
 - add in inline parsing and rendering
 

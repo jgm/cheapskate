@@ -92,14 +92,23 @@ processDocument (Container ct cs, refmap) =
 
 processElts :: ReferenceMap -> [Elt] -> Blocks
 processElts _ [] = mempty
-processElts refmap (L lineNumber lf : rest) =
+processElts refmap (L _lineNumber lf : rest) =
   case lf of
-    TextLine t -> undefined
-    BlankLine -> Seq.empty
-    ATXHeader lvl t -> singleton $ Header lvl $ parseInlines refmap t
-    SetextHeader lvl t -> singleton $ Header lvl $ parseInlines refmap t
-    Rule -> singleton HRule
-    Reference lab url tit -> Seq.empty
+    TextLine t -> singleton (Para $ parseInlines refmap txt) <>
+                  processElts refmap rest'
+               where txt = joinLines $ t : map extractText textlines
+                     (textlines, rest') = span isTextLine rest
+                     isTextLine (L _ (TextLine _)) = True
+                     isTextLine _ = False
+                     extractText (L _ (TextLine t)) = t
+                     extractText _ = mempty
+    BlankLine -> processElts refmap rest
+    ATXHeader lvl t -> singleton (Header lvl $ parseInlines refmap t) <>
+                       processElts refmap rest
+    SetextHeader lvl t -> singleton (Header lvl $ parseInlines refmap t) <>
+                          processElts refmap rest
+    Rule -> singleton HRule <> processElts refmap rest
+    Reference lab url tit -> processElts refmap rest
 
 processElts refmap (C (Container ct cs) : rest) =
   case ct of

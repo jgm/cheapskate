@@ -159,10 +159,8 @@ processLine (lineNumber, txt) = do
                             _                       -> False
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 txt
   case ct of
-    -- TODO instead of special casing these, create generic attributes
-    -- like "isTextContainer" and "allowsLazy"
     RawHtmlBlock{} | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
-    IndentedCode | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
+    IndentedCode   | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     FencedCode{ fence = fence } ->  -- here we don't check numUnmatched because we allow laziness
       if fence `T.isPrefixOf` t'
          -- closing code fence
@@ -177,7 +175,6 @@ processLine (lineNumber, txt) = do
             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
        ([], SetextHeader lev _) | numUnmatched == 0 ->
            case viewr cs of
-             -- TODO is there a way to avoid special-casing this?  isUnderline?
              (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
                put $ ContainerStack (Container ct (cs' |> L lineNumber (SetextHeader lev t))) rest
                -- Note: the following case should not occur, since

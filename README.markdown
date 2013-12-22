@@ -100,24 +100,6 @@ have consecutive lists:
 
     - one (new list)
 
-A blank line is not required before a list.  So, this is a
-paragraph containing a list:
-
-    Here is my list:
-    - one
-    - two
-
-Note that this does open risk of unexpected results, when a line begins with
-something like '88.'
-
-Note also that in the following, the final line is *not* a new paragraph,
-but a lazy continuation of the second list item:
-
-    Here is my list:
-    - one
-    - two
-    And more.
-
 ### Indentation of list continuations
 
 Block elements inside list items need not be indented four

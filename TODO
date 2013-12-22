@@ -1,8 +1,6 @@
 - processLines:
   - handle reference definitions
   - handle raw html blocks
-  - don't allow lists to start after a paragraph line.
-    Too easy to capture numbers at end of sentence, etc.
 
 - code to take output of processLines and create AST
 

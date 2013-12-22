@@ -44,7 +44,7 @@ data ContainerType = Document
                    | ListItem { listIndent :: Int, listType :: ListType }
                    | FencedCode { fence :: Text, info :: Text }
                    | IndentedCode
-                   deriving Show
+                   deriving (Eq, Show)
 
 instance Show Container where
   show (Container ct cs) =
@@ -115,18 +115,18 @@ tryScanners (c:cs) colnum t =
                                       <|> () <$ string (T.replicate n " ")
                        _              -> return ()
 
-containerize :: Text -> ([ContainerType], Leaf)
-containerize t =
-  case parseOnly ((,) <$> many containerStart <*> leaf) t of
+containerize :: Bool -> Text -> ([ContainerType], Leaf)
+containerize lastLineIsText t =
+  case parseOnly ((,) <$> many (containerStart lastLineIsText) <*> leaf) t of
        Right (cs,t') -> (cs,t')
        Left err      -> error err
 
-containerStart :: Parser ContainerType
-containerStart =
+containerStart :: Bool -> Parser ContainerType
+containerStart lastLineIsText =
       (BlockQuote <$ scanBlockquoteStart)
-  <|> parseListMarker
+  <|> (guard (not lastLineIsText) *> parseListMarker)
   <|> parseCodeFence
-  <|> (IndentedCode <$ scanIndentSpace)
+  <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
 
 leaf :: Parser Leaf
 leaf =
@@ -139,6 +139,9 @@ leaf =
 processLine :: (LineNumber, Text) -> ContainerM ()
 processLine (lineNumber, t) = do
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
+  let lastLineIsText = case viewr cs of
+                            (_ :> L _ (TextLine _)) -> True
+                            _                       -> False
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 t
   case ct of
     IndentedCode | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
@@ -147,11 +150,12 @@ processLine (lineNumber, t) = do
          -- closing code fence
          then closeContainer
          else addLeaf lineNumber (TextLine t')
-    _ -> case containerize t' of
+    _ -> case containerize lastLineIsText t' of
        ([], TextLine t) ->
          case viewr cs of
             -- lazy continuation?
-            (cs' :> L _ (TextLine _)) -> addLeaf lineNumber (TextLine t)
+            (cs' :> L _ (TextLine _))
+              | ct /= IndentedCode -> addLeaf lineNumber (TextLine t)
             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
        ([], SetextHeader lev _) | numUnmatched == 0 ->
            case viewr cs of

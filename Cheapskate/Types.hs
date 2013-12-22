@@ -21,7 +21,7 @@ data Block = Para Inlines
 data CodeAttr = CodeAttr { codeLang :: Maybe Text }
               deriving Show
 
-data ListType = Bullet Char | Numbered NumWrapper Int deriving Show
+data ListType = Bullet Char | Numbered NumWrapper Int deriving (Eq,Show)
 data NumWrapper = PeriodFollowing | ParenFollowing deriving (Eq,Show)
 
 -- Simple representation of HTML tag.

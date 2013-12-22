@@ -8,7 +8,7 @@ import Data.List (foldl', intercalate, intersperse)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid
-import Data.Foldable (toList)
+import Data.Foldable (toList, foldMap)
 import Data.Sequence (Seq, (<|), (|>), (><), viewr, ViewR(..), singleton)
 import qualified Data.Sequence as Seq
 import Network.URI (parseURI, isAllowedInURI, escapeURIString)
@@ -100,8 +100,6 @@ processElts refmap (L _lineNumber lf : rest) =
                      (textlines, rest') = span isTextLine rest
                      isTextLine (L _ (TextLine _)) = True
                      isTextLine _ = False
-                     extractText (L _ (TextLine t)) = t
-                     extractText _ = mempty
     BlankLine -> processElts refmap rest
     ATXHeader lvl t -> singleton (Header lvl $ parseInlines refmap t) <>
                        processElts refmap rest
@@ -113,17 +111,29 @@ processElts refmap (L _lineNumber lf : rest) =
 processElts refmap (C (Container ct cs) : rest) =
   case ct of
     Document -> error "Document container found inside Document"
-    BlockQuote -> singleton $ Blockquote
-                  $ processElts refmap (toList cs)
+    BlockQuote -> singleton (Blockquote $ processElts refmap (toList cs)) <>
+                  processElts refmap rest
     ListItem listIndent' listType' -> undefined
-    FencedCode fence' info' -> undefined
+    FencedCode fence' info' -> singleton (CodeBlock attr txt) <>
+                               processElts refmap rest
+                  where txt = joinLines $ map extractText $ toList cs
+                        attr = case T.words info' of
+                                  []    -> CodeAttr Nothing
+                                  (w:_) -> CodeAttr (Just w)
     IndentedCode -> undefined
-    RawHtmlBlock openingHtml' -> undefined
+    RawHtmlBlock openingHtml' -> singleton (HtmlBlock txt) <>
+                                 processElts refmap rest
+                  where txt = joinLines $ openingHtml' : map extractText
+                              (toList cs)
 
   -- recursively generate blocks
   -- this requrse grouping text lines into paragraphs,
   -- and list items into lists, handling blank lines,
   -- parsing inline contents of texts and resolving refs.
+
+extractText :: Elt -> Text
+extractText (L _ (TextLine t)) = t
+extractText _ = mempty
 
 processLines :: Text -> (Container, ReferenceMap)
 processLines t = (doc, refmap)

@@ -1,7 +1,3 @@
-- processLines:
-  - handle reference definitions
-  - handle raw html blocks
-
 - code to take output of processLines and create AST
 
 - add in inline parsing and rendering

@@ -44,6 +44,7 @@ data ContainerType = Document
                    | ListItem { listIndent :: Int, listType :: ListType }
                    | FencedCode { fence :: Text, info :: Text }
                    | IndentedCode
+                   | RawHtmlBlock { openingHtml :: Text }
                    deriving (Eq, Show)
 
 instance Show Container where
@@ -63,6 +64,7 @@ data Leaf = TextLine Text
           | SetextHeader Int Text
           | HtmlBlock Text
           | Rule
+          | Reference{ referenceLabel :: Text, referenceURL :: Text, referenceTitle :: Text }
           deriving (Show)
 
 type ContainerM = RWS () ReferenceMap ContainerStack
@@ -108,16 +110,17 @@ tryScanners (c:cs) colnum t =
        Right t'   -> tryScanners cs (colnum + T.length t - T.length t') t'
        Left _err  -> (t, length (c:cs))
   where scanner = case containerType c of
-                       BlockQuote    -> scanBlockquoteStart
-                       IndentedCode  -> scanIndentSpace
+                       BlockQuote     -> scanBlockquoteStart
+                       IndentedCode   -> scanIndentSpace
+                       RawHtmlBlock{} -> nfb scanBlankline
                        ListItem{ listIndent = n }
-                                     -> scanBlankline
+                                      -> scanBlankline
                                       <|> () <$ string (T.replicate n " ")
                        _              -> return ()
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)
 containerize lastLineIsText t =
-  case parseOnly ((,) <$> many (containerStart lastLineIsText) <*> leaf) t of
+  case parseOnly ((,) <$> many (containerStart lastLineIsText) <*> leaf lastLineIsText) t of
        Right (cs,t') -> (cs,t')
        Left err      -> error err
 
@@ -127,12 +130,14 @@ containerStart lastLineIsText =
   <|> (guard (not lastLineIsText) *> parseListMarker)
   <|> parseCodeFence
   <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
+  <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$> parseHtmlBlockStart))
 
-leaf :: Parser Leaf
-leaf =
+leaf :: Bool -> Parser Leaf
+leaf lastLineIsText =
       (ATXHeader <$> parseAtxHeaderStart <*> (T.dropWhileEnd (`elem` " #") <$> takeText))
-  <|> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty)
+  <|> (guard (not lastLineIsText) *> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty))
   <|> (Rule <$ scanHRuleLine)
+  <|> (guard (not lastLineIsText) *> pReference)
   <|> (BlankLine <$ (skipWhile (==' ') <* endOfInput))
   <|> (TextLine <$> takeText)
 
@@ -144,6 +149,7 @@ processLine (lineNumber, t) = do
                             _                       -> False
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 t
   case ct of
+    RawHtmlBlock{} | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     IndentedCode | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     FencedCode{ fence = fence } ->
       if fence `T.isPrefixOf` t'
@@ -168,6 +174,10 @@ processLine (lineNumber, t) = do
            case (reverse ns, lf) of
              -- don't add blank line at beginning of fenced code block
              (FencedCode{}:_,  BlankLine) -> return ()
+             (_, Reference{ referenceLabel = lab,
+                            referenceURL = url,
+                            referenceTitle = tit }) -> tell (M.singleton lab (url, tit))
+                                                       >> addLeaf lineNumber lf
              _ -> addLeaf lineNumber lf
 
 -- Utility functions.
@@ -190,6 +200,17 @@ tabFilter = T.concat . pad . T.split (== '\t')
 -- Note: we strip out tabs.
 isEmptyLine :: Text -> Bool
 isEmptyLine = T.all (==' ')
+
+-- These are the whitespace characters that are significant in
+-- parsing markdown. We can treat \160 (nonbreaking space) etc.
+-- as regular characters.  This function should be considerably
+-- faster than the unicode-aware isSpace from Data.Char.
+isWhitespace :: Char -> Bool
+isWhitespace ' '  = True
+isWhitespace '\t' = True
+isWhitespace '\n' = True
+isWhitespace '\r' = True
+isWhitespace _    = False
 
 -- The original Markdown only allowed certain symbols
 -- to be backslash-escaped.  It was hard to remember
@@ -323,12 +344,14 @@ parseCodeFence = do
   endOfInput
   return $ FencedCode { fence = T.pack [c,c,c] <> extra, info = rawattr }
 
--- Scan the start of an HTML block:  either an HTML tag or an
+-- Parse the start of an HTML block:  either an HTML tag or an
 -- HTML comment, with no indentation.
-scanHtmlBlockStart :: Scanner
-scanHtmlBlockStart = (   (pHtmlTag >>= guard . f . fst)
-                     <|> (() <$ string "<!--")
-                     <|> (() <$ string "-->" ))
+parseHtmlBlockStart :: Parser Text
+parseHtmlBlockStart = (   (do t <- pHtmlTag
+                              guard $ f $ fst t
+                              return $ snd t)
+                     <|> string "<!--"
+                     <|> string "-->" )
   where f (Opening name) = name `Set.member` blockHtmlTags
         f (SelfClosing name) = name `Set.member` blockHtmlTags
         f (Closing name) = name `Set.member` blockHtmlTags
@@ -430,6 +453,57 @@ pLinkLabel = char '[' *> (T.concat <$>
         bracketed = inBrackets <$> pLinkLabel
         inBrackets t = "[" <> t <> "]"
 
+-- A URL in a link or reference.  This may optionally be contained
+-- in `<..>`; otherwise whitespace and unbalanced right parentheses
+-- aren't allowed.  Newlines aren't allowed in any case.
+pLinkUrl :: Parser Text
+pLinkUrl = do
+  inPointy <- (char '<' >> return True) <|> return False
+  if inPointy
+     then T.pack <$> manyTill
+           (pSatisfy (\c -> c /='\r' && c /='\n')) (char '>')
+     else T.concat <$> many (regChunk <|> parenChunk)
+    where regChunk = takeWhile1 (notInClass " \t\n\r()\\") <|> pEscaped
+          parenChunk = parenthesize . T.concat <$> (char '(' *>
+                         manyTill (regChunk <|> parenChunk) (char ')'))
+          parenthesize x = "(" <> x <> ")"
+
+-- A link title, single or double quoted or in parentheses.
+-- Note that Markdown.pl doesn't allow the parenthesized form in
+-- inline links -- only in references -- but this restriction seems
+-- arbitrary, so we remove it here.
+pLinkTitle :: Parser Text
+pLinkTitle = do
+  c <- satisfy (\c -> c == '"' || c == '\'' || c == '(')
+  next <- peekChar
+  case next of
+       Nothing                 -> mzero
+       Just x
+         | isWhitespace x      -> mzero
+         | x == ')'            -> mzero
+         | otherwise           -> return ()
+  let ender = if c == '(' then ')' else c
+  let pEnder = char ender <* nfb (skip isAlphaNum)
+  let regChunk = takeWhile1 (\x -> x /= ender && x /= '\\') <|> pEscaped
+  let nestedChunk = (\x -> T.singleton c <> x <> T.singleton ender)
+                      <$> pLinkTitle
+  T.concat <$> manyTill (regChunk <|> nestedChunk) pEnder
+
+-- A link reference is a square-bracketed link label, a colon,
+-- optional space or newline, a URL, optional space or newline,
+-- and an optional link title.
+pReference :: Parser Leaf
+pReference = do
+  scanNonindentSpaces
+  lab <- pLinkLabel
+  char ':'
+  scanSpnl
+  url <- pLinkUrl
+  tit <- option T.empty $ scanSpnl >> pLinkTitle
+  scanSpaces
+  endOfInput
+  return $ Reference { referenceLabel = lab, referenceURL = url, referenceTitle = tit }
+
 -- Parses an escaped character and returns a Text.
 pEscaped :: Parser Text
 pEscaped = T.singleton <$> (skip (=='\\') *> satisfy isEscapable)
@@ -449,5 +523,4 @@ pCode' = do
   let backtickSpan = takeWhile1 (== '`')
   contents <- T.concat <$> manyTill (nonBacktickSpan <|> backtickSpan) end
   return (Seq.singleton . Code . T.strip $ contents, ticks <> contents <> ticks)
-
 

@@ -185,8 +185,7 @@ processLine (lineNumber, txt) = do
              (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
                put $ ContainerStack (Container ct (cs' |> L lineNumber (SetextHeader lev t))) rest
                -- Note: the following case should not occur, since
-               -- we guard on lastLineIsText.
-             -- _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t')
+               -- we don't add a SetextHeader leaf unless lastLineIsText.
              _ -> error "setext header line without preceding text line"
        (ns, lf) -> do -- close unmatched containers, add new ones
            replicateM numUnmatched closeContainer
@@ -356,6 +355,7 @@ scanHRuleLine = do
 -- the fence part and the rest (after any spaces).
 parseCodeFence :: Parser ContainerType
 parseCodeFence = do
+  scanNonindentSpaces
   c <- satisfy $ inClass "`~"
   count 2 (char c)
   extra <- takeWhile (== c)

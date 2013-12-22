@@ -11,6 +11,8 @@ import qualified Data.ByteString as B
 import qualified Data.Text.IO as T
 import qualified Data.Text as T
 
+import Cheapskate.Parse (processLines) -- TODO for now
+
 convert :: [String] -> Text -> IO ()
 convert opts = render . parseMarkdown
     where render x = if "-n" `elem` opts
@@ -28,6 +30,10 @@ main = do
       isOpt _       = False
   let (opts, files) = partition isOpt args
   case files of
+       [] -> T.getContents >>= print . fst . processLines
+       _  -> mapM T.readFile files >>= print . fst . processLines . T.unlines
+{-
+  case files of
        [] -> T.getContents >>= convert opts
        _  -> mapM T.readFile files >>= convert opts . T.unlines
-
+-}

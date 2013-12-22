@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cheapskate.Parse (parseMarkdown) where
+module Cheapskate.Parse (parseMarkdown, processLines {- TODO for now -}) where
 import Data.Char
 import qualified Data.Set as Set
 import Prelude hiding (takeWhile)
@@ -178,9 +178,10 @@ processLine (lineNumber, txt) = do
              -- TODO is there a way to avoid special-casing this?  isUnderline?
              (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
                put (Container ct (cs' |> L lineNumber (SetextHeader lev t)) : rest)
-               -- TODO this fallback isn't really right:  if we can't parse a setext
-               -- header, we need complete fallback line to be included in the element:
-             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t')
+               -- Note: the following case should not occur, since
+               -- we guard on lastLineIsText.
+             -- _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t')
+             _ -> error "setext header line without preceding text line"
        (ns, lf) -> do -- close unmatched containers, add new ones
            replicateM numUnmatched closeContainer
            mapM_ addContainer ns

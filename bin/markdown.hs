@@ -29,11 +29,9 @@ main = do
   let isOpt ('-':_) = True
       isOpt _       = False
   let (opts, files) = partition isOpt args
+  let handle = if "--debug" `elem` opts
+      then print . fst . processLines
+      else convert opts
   case files of
-       [] -> T.getContents >>= print . fst . processLines
-       _  -> mapM T.readFile files >>= print . fst . processLines . T.unlines
-{-
-  case files of
-       [] -> T.getContents >>= convert opts
-       _  -> mapM T.readFile files >>= convert opts . T.unlines
--}
+       [] -> T.getContents >>= handle
+       _  -> mapM T.readFile files >>= handle . T.unlines

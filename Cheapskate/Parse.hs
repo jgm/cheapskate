@@ -267,8 +267,9 @@ processLine (lineNumber, txt) = do
              (FencedCode{}:_,  BlankLine) -> return ()
              (_, Reference{ referenceLabel = lab,
                             referenceURL = url,
-                            referenceTitle = tit }) -> tell (M.singleton lab (url, tit))
-                                                       >> addLeaf lineNumber lf
+                            referenceTitle = tit }) ->
+               tell (M.singleton (normalizeReference lab) (url, tit))
+               >> addLeaf lineNumber lf
              _ -> addLeaf lineNumber lf
 
 -- Utility functions.

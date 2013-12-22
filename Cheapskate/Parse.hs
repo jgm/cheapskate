@@ -23,7 +23,9 @@ tr' s x = trace (s ++ ": " ++ show x) x
 parseMarkdown :: Text -> Blocks
 parseMarkdown = processContainers . processLines
 
-type ContainerStack = [Container]
+data ContainerStack = ContainerStack { stackTop  :: Container
+                                     , stackRest :: [Container]
+                                     }
 
 type ReferenceMap = M.Map Text (Text, Text)
 
@@ -81,34 +83,35 @@ processLines t = (doc, refmap)
   where
   (doc, refmap) = evalRWS (mapM_ processLine lns >> closeStack) () startState
   lns        = zip [1..] (map tabFilter $ T.lines t)
-  startState = [Container Document mempty]
+  startState = ContainerStack (Container Document mempty) []
 
 closeStack :: ContainerM Container
 closeStack = do
-  (top:rest) <- get
+  ContainerStack top rest  <- get
   if null rest
      then return top
      else closeContainer >> closeStack
 
 closeContainer :: ContainerM ()
 closeContainer = do
-  (top:rest) <- get
+  ContainerStack top rest <- get
   case rest of
-       (Container ct' cs' : rs) -> put $ Container ct' (cs' |> C top) : rs
+       (Container ct' cs' : rs) -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
        [] -> fail "Cannot close last container on stack"
 
 addLeaf :: LineNumber -> Leaf -> ContainerM ()
 addLeaf lineNum lf = do
-  (top:rest) <- get
+  ContainerStack top rest <- get
   put $ case (top, lf) of
         (Container ct cs, TextLine t) ->
           case viewr cs of
-            (cs' :> L _ (TextLine _)) -> Container ct (cs |> L lineNum lf) : rest
-            _ -> Container ct (cs |> L lineNum lf) : rest
-        (Container ct cs, c) -> Container ct (cs |> L lineNum c) : rest
+            (cs' :> L _ (TextLine _)) -> ContainerStack (Container ct (cs |> L lineNum lf)) rest
+            _ -> ContainerStack (Container ct (cs |> L lineNum lf)) rest
+        (Container ct cs, c) -> ContainerStack (Container ct (cs |> L lineNum c)) rest
 
 addContainer :: ContainerType -> ContainerM ()
-addContainer ct = modify (Container ct mempty :)
+addContainer ct = modify $ \(ContainerStack top rest) ->
+  ContainerStack (Container ct mempty) (top:rest)
 
 tryScanners :: [Container] -> ColumnNumber -> Text -> (Text, Int)
 tryScanners [] _ t = (t, 0)
@@ -150,8 +153,7 @@ leaf lastLineIsText =
 
 processLine :: (LineNumber, Text) -> ContainerM ()
 processLine (lineNumber, txt) = do
-  -- TODO find a representation of the stack so that nonemptiness is statically guranteed:
-  (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
+  ContainerStack top@(Container ct cs) rest <- get
   let lastLineIsText = case viewr cs of
                             (_ :> L _ (TextLine _)) -> True
                             _                       -> False
@@ -177,7 +179,7 @@ processLine (lineNumber, txt) = do
            case viewr cs of
              -- TODO is there a way to avoid special-casing this?  isUnderline?
              (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
-               put (Container ct (cs' |> L lineNumber (SetextHeader lev t)) : rest)
+               put $ ContainerStack (Container ct (cs' |> L lineNumber (SetextHeader lev t))) rest
                -- Note: the following case should not occur, since
                -- we guard on lastLineIsText.
              -- _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t')

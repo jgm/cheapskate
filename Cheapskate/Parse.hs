@@ -113,14 +113,30 @@ processElts refmap (C (Container ct cs) : rest) =
     Document -> error "Document container found inside Document"
     BlockQuote -> singleton (Blockquote $ processElts refmap (toList cs)) <>
                   processElts refmap rest
-    ListItem listIndent' listType' -> undefined
+    ListItem listIndent' listType' -> undefined -- TODO
     FencedCode fence' info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
                   where txt = joinLines $ map extractText $ toList cs
                         attr = case T.words info' of
                                   []    -> CodeAttr Nothing
                                   (w:_) -> CodeAttr (Just w)
-    IndentedCode -> undefined
+    IndentedCode -> singleton (CodeBlock (CodeAttr Nothing) txt)
+                    <> processElts refmap rest'
+                  where txt = joinLines $ map extractCode cbs'
+                        extractCode (C (Container IndentedCode cs)) =
+                          joinLines $ map extractText $ toList cs
+                        extractCode (L _ BlankLine) = ""
+                        extractCode _ = ""
+                        cbs' = case reverse cbs of
+                                    (L _ BlankLine : _) -> init cbs
+                                    _ -> cbs
+                        (cbs, rest') = span isIndentedCodeOrBlank
+                                       (C (Container ct cs) : rest)
+                        isIndentedCodeOrBlank (L _ BlankLine) = True
+                        isIndentedCodeOrBlank (C (Container IndentedCode _))
+                                                              = True
+                        isIndentedCodeOrBlank _               = False
+
     RawHtmlBlock openingHtml' -> singleton (HtmlBlock txt) <>
                                  processElts refmap rest
                   where txt = joinLines $ openingHtml' : map extractText
@@ -160,7 +176,7 @@ addLeaf :: LineNumber -> Leaf -> ContainerM ()
 addLeaf lineNum lf = do
   ContainerStack top rest <- get
   put $ case (top, lf) of
-        (Container ct cs, TextLine t) ->
+        (Container ct cs, TextLine _) ->
           case viewr cs of
             (cs' :> L _ (TextLine _)) -> ContainerStack (Container ct (cs |> L lineNum lf)) rest
             _ -> ContainerStack (Container ct (cs |> L lineNum lf)) rest

@@ -142,23 +142,26 @@ containerStart lastLineIsText =
 leaf :: Bool -> Parser Leaf
 leaf lastLineIsText =
       (ATXHeader <$> parseAtxHeaderStart <*> (T.dropWhileEnd (`elem` " #") <$> takeText))
-  <|> (guard (not lastLineIsText) *> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty))
+  <|> (guard lastLineIsText *> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty))
   <|> (Rule <$ scanHRuleLine)
   <|> (guard (not lastLineIsText) *> pReference)
   <|> (BlankLine <$ (skipWhile (==' ') <* endOfInput))
   <|> (TextLine <$> takeText)
 
 processLine :: (LineNumber, Text) -> ContainerM ()
-processLine (lineNumber, t) = do
+processLine (lineNumber, txt) = do
+  -- TODO find a representation of the stack so that nonemptiness is statically guranteed:
   (top@(Container ct cs) : rest) <- get  -- assumes stack is never empty
   let lastLineIsText = case viewr cs of
                             (_ :> L _ (TextLine _)) -> True
                             _                       -> False
-  let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 t
+  let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 txt
   case ct of
+    -- TODO instead of special casing these, create generic attributes
+    -- like "isTextContainer" and "allowsLazy"
     RawHtmlBlock{} | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     IndentedCode | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
-    FencedCode{ fence = fence } ->
+    FencedCode{ fence = fence } ->  -- here we don't check numUnmatched because we allow laziness
       if fence `T.isPrefixOf` t'
          -- closing code fence
          then closeContainer
@@ -172,9 +175,12 @@ processLine (lineNumber, t) = do
             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
        ([], SetextHeader lev _) | numUnmatched == 0 ->
            case viewr cs of
+             -- TODO is there a way to avoid special-casing this?  isUnderline?
              (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
                put (Container ct (cs' |> L lineNumber (SetextHeader lev t)) : rest)
-             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
+               -- TODO this fallback isn't really right:  if we can't parse a setext
+               -- header, we need complete fallback line to be included in the element:
+             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t')
        (ns, lf) -> do -- close unmatched containers, add new ones
            replicateM numUnmatched closeContainer
            mapM_ addContainer ns

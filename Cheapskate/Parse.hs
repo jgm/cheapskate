@@ -58,6 +58,7 @@ nest num = intercalate "\n" . map ((replicate num ' ') ++) . lines
 
 showElt :: Elt -> String
 showElt (C c) = show c
+showElt (L _ (TextLine s)) = show s
 showElt (L _ lf) = show lf
 
 data Leaf = TextLine Text
@@ -130,15 +131,21 @@ tryScanners (c:cs) colnum t =
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)
 containerize lastLineIsText t =
-  case parseOnly ((,) <$> many (containerStart lastLineIsText) <*> leaf lastLineIsText) t of
-       Right (cs,t') -> (cs,t')
-       Left err      -> error err
+  case parseOnly ((,,) <$> many (containerStart lastLineIsText)
+                       <*> (option [] $ count 1
+                                      $ textContainerStart lastLineIsText)
+                       <*> leaf lastLineIsText) t of
+       Right (cs,tcs,t') -> (cs ++ tcs, t')
+       Left err          -> error err
 
 containerStart :: Bool -> Parser ContainerType
 containerStart lastLineIsText =
       (BlockQuote <$ scanBlockquoteStart)
   <|> (guard (not lastLineIsText) *> parseListMarker)
-  <|> parseCodeFence
+
+textContainerStart :: Bool -> Parser ContainerType
+textContainerStart lastLineIsText =
+      parseCodeFence
   <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
   <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$> parseHtmlBlockStart))
 

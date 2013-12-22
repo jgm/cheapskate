@@ -79,17 +79,6 @@ So, the following is two consecutive bullet lists:
 
 ### List separation
 
-A new list starts if you change from tight spacing to loose.
-So, the following is parsed as a tight list followed by a loose
-list:
-
-    - one
-    - two
-
-    - one
-
-    - two
-
 Two blank lines breaks out of a list.  This allows you to
 have consecutive lists:
 

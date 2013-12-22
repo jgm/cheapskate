@@ -3,6 +3,7 @@ module Cheapskate.Parse (parseMarkdown, processLines {- TODO for now -}) where
 import Data.Char hiding (Space)
 import qualified Data.Set as Set
 import Prelude hiding (takeWhile)
+import Data.Maybe (mapMaybe)
 import Data.Attoparsec.Text
 import Data.List (foldl', intercalate, intersperse)
 import Data.Text (Text)
@@ -113,7 +114,35 @@ processElts refmap (C (Container ct cs) : rest) =
     Document -> error "Document container found inside Document"
     BlockQuote -> singleton (Blockquote $ processElts refmap (toList cs)) <>
                   processElts refmap rest
-    ListItem listIndent' listType' -> undefined -- TODO
+    ListItem _ listType' ->
+        singleton (List isTight listType' items') <> processElts refmap rest'
+              where xs = takeListItems rest
+                    rest' = drop (length xs) rest
+                    takeListItems (C c@(Container (ListItem _ lt') cs') : zs)
+                      | listTypesMatch lt' listType' =
+                        if endsWithTwoBlanks cs'
+                           then [c]
+                           else c : takeListItems zs
+                      | otherwise = []
+                    takeListItems _ = []
+                    listTypesMatch (Bullet c1) (Bullet c2) = c1 == c2
+                    listTypesMatch (Numbered w1 _) (Numbered w2 _) = w1 == w2
+                    listTypesMatch _ _ = False
+                    endsWithTwoBlanks cs' =
+                        case reverse (toList cs') of
+                             (L _ BlankLine : L _ BlankLine : _) -> True
+                             _                                   -> False
+                    items = mapMaybe getItem (Container ct cs : xs)
+                    getItem (Container ListItem{} cs) =
+                      let csL = toList cs in
+                      Just (length (filter isBlankLine csL), csL)
+                    getItem _                         = Nothing
+                    isBlankLine (L _ BlankLine) = True
+                    isBlankLine _ = False
+                    items' = map (processElts refmap . snd) items
+                    isTight = case reverse (map fst items) of
+                                    (w:ws) -> w <= 1 && all (==0) ws
+                                    [] -> False
     FencedCode fence' info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
                   where txt = joinLines $ map extractText $ toList cs
@@ -199,6 +228,7 @@ tryScanners (c:cs) colnum t =
                        ListItem{ listIndent = n }
                                       -> scanBlankline
                                       <|> () <$ string (T.replicate n " ")
+                                      -- <|> () <$ parseListMarker
                        _              -> return ()
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)
@@ -213,7 +243,7 @@ containerize lastLineIsText t =
 containerStart :: Bool -> Parser ContainerType
 containerStart lastLineIsText =
       (BlockQuote <$ scanBlockquoteStart)
-  <|> (guard (not lastLineIsText) *> parseListMarker)
+  <|> parseListMarker
 
 textContainerStart :: Bool -> Parser ContainerType
 textContainerStart lastLineIsText =

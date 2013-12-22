@@ -21,7 +21,7 @@ import Debug.Trace
 tr' s x = trace (s ++ ": " ++ show x) x
 
 parseMarkdown :: Text -> Blocks
-parseMarkdown = undefined
+parseMarkdown = processContainers . processLines
 
 type ContainerStack = [Container]
 
@@ -68,6 +68,13 @@ data Leaf = TextLine Text
           deriving (Show)
 
 type ContainerM = RWS () ReferenceMap ContainerStack
+
+processContainers :: (Container, ReferenceMap) -> Blocks
+processContainers (container, refmap) = mempty
+  -- recursively generate blocks
+  -- this requrse grouping text lines into paragraphs,
+  -- and list items into lists, handling blank lines,
+  -- parsing inline contents of texts and resolving refs.
 
 processLines :: Text -> (Container, ReferenceMap)
 processLines t = (doc, refmap)

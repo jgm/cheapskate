@@ -134,14 +134,15 @@ processElts refmap (C (Container ct cs) : rest) =
                              (L _ BlankLine : L _ BlankLine : _) -> True
                              _                                   -> False
                     items = mapMaybe getItem (Container ct cs : xs)
-                    getItem (Container ListItem{} cs) =
-                      let csL = toList cs in
-                      Just (length (filter isBlankLine csL), csL)
+                    getItem (Container ListItem{} cs) = Just $ toList cs
                     getItem _                         = Nothing
-                    items' = map (processElts refmap . snd) items
-                    isTight = case reverse (map fst items) of
-                                    (w:ws) -> w <= 1 && all (==0) ws
-                                    [] -> False
+                    items' = map (processElts refmap) items
+                    itemsMinusTrailingBlanks =
+                          reverse $ case reverse items of
+                                         (w:ws) -> stripTrailingBlanks w : ws
+                                         []     -> []
+                    isTight = not $ any (any isBlankLine)
+                              itemsMinusTrailingBlanks
     FencedCode fence' info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
                   where txt = T.unlines $ map extractText $ toList cs
@@ -155,7 +156,7 @@ processElts refmap (C (Container ct cs) : rest) =
                         extractCode (C (Container IndentedCode cs)) =
                           joinLines $ map extractText $ toList cs
                         extractCode _ = ""
-                        cbs' = reverse $ dropWhile isBlankLine $ reverse cbs
+                        cbs' = stripTrailingBlanks cbs
                         (cbs, rest') = span isIndentedCodeOrBlank
                                        (C (Container ct cs) : rest)
                         isIndentedCodeOrBlank (L _ BlankLine) = True
@@ -170,6 +171,7 @@ processElts refmap (C (Container ct cs) : rest) =
 
    where isBlankLine (L _ BlankLine) = True
          isBlankLine _ = False
+         stripTrailingBlanks = reverse . dropWhile isBlankLine . reverse
 
   -- recursively generate blocks
   -- this requrse grouping text lines into paragraphs,

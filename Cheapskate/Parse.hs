@@ -4,17 +4,16 @@ import Data.Char hiding (Space)
 import qualified Data.Set as Set
 import Prelude hiding (takeWhile)
 import Data.Maybe (mapMaybe)
-import Data.Attoparsec.Text
+import Data.Attoparsec.Text as Attoparsec
 import Data.List (foldl', intercalate, intersperse)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid
 import Data.Foldable (toList, foldMap)
-import Data.Sequence (Seq, (<|), (|>), (><), viewr, ViewR(..), singleton)
+import Data.Sequence (Seq, (<|), (|>), viewr, ViewR(..), singleton)
 import qualified Data.Sequence as Seq
 import Network.URI (parseURI, isAllowedInURI, escapeURIString)
 import Control.Monad.RWS
-import Control.Monad
 import qualified Data.Map as M
 import Cheapskate.Types
 import Control.Applicative
@@ -256,13 +255,14 @@ verbatimContainerStart lastLineIsText =
   <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$> parseHtmlBlockStart))
 
 leaf :: Bool -> Parser Leaf
-leaf lastLineIsText =
+leaf lastLineIsText = scanNonindentSpace *> (
       (ATXHeader <$> parseAtxHeaderStart <*> (T.dropWhileEnd (`elem` " #") <$> takeText))
   <|> (guard lastLineIsText *> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty))
   <|> (Rule <$ scanHRuleLine)
   <|> (guard (not lastLineIsText) *> pReference)
   <|> (BlankLine <$ (skipWhile (==' ') <* endOfInput))
   <|> (TextLine <$> takeText)
+  )
 
 processLine :: (LineNumber, Text) -> ContainerM ()
 processLine (lineNumber, txt) = do
@@ -322,11 +322,6 @@ tabFilter = T.concat . pad . T.split (== '\t')
                          n  = tl + 4 - (tl `mod` 4)
                          in  T.justifyLeft n ' ' t : pad ts
 
--- A line with all space characters is regarded as empty.
--- Note: we strip out tabs.
-isEmptyLine :: Text -> Bool
-isEmptyLine = T.all (==' ')
-
 -- These are the whitespace characters that are significant in
 -- parsing markdown. We can treat \160 (nonbreaking space) etc.
 -- as regular characters.  This function should be considerably
@@ -354,38 +349,22 @@ isEscapable c = isAscii c && (isSymbol c || isPunctuation c)
 -- operate on a single line of input (so endOfInput = endOfLine).
 type Scanner = Parser ()
 
--- Try a list of scanners, in order from first to last,
--- returning Just the remaining text if they all match,
--- Nothing if any of them fail.  Note that
--- applyScanners [a,b,c] == applyScanners [a >> b >> c].
-applyScanners :: [Scanner] -> Text -> Maybe Text
-applyScanners scanners t =
-  case parseOnly (sequence_ scanners >> takeText) t of
-       Right t'   -> Just t'
-       Left _err  -> Nothing
-
 -- Scan the beginning of a blockquote:  up to three
 -- spaces indent, the `>` character, and an optional space.
 scanBlockquoteStart :: Scanner
 scanBlockquoteStart =
-  scanNonindentSpaces >> scanChar '>' >> opt (scanChar ' ')
+  scanNonindentSpace >> scanChar '>' >> opt (scanChar ' ')
 
 -- Scan four spaces.
 scanIndentSpace :: Scanner
 scanIndentSpace = () <$ count 4 (skip (==' '))
 
 -- Scan 0-3 spaces.
-scanNonindentSpaces :: Scanner
-scanNonindentSpaces = do
-  xs <- takeWhile (==' ')
-  if T.length xs > 3 then mzero else return ()
+scanNonindentSpace :: Scanner
+scanNonindentSpace = () <$ upToCountChars 3 (==' ')
 
 parseNonindentSpaces :: Parser Int
-parseNonindentSpaces = do
-  xs <- takeWhile (==' ')
-  case T.length xs of
-       n | n > 3 -> mzero
-         | otherwise -> return n
+parseNonindentSpaces = T.length <$> upToCountChars 3 (==' ')
 
 -- Scan a specified character.
 scanChar :: Char -> Scanner
@@ -425,6 +404,10 @@ nfb s = do
 nfbChar :: Char -> Scanner
 nfbChar c = nfb (skip (==c))
 
+upToCountChars :: Int -> (Char -> Bool) -> Parser Text
+upToCountChars count f =
+  Attoparsec.scan 0 (\n c -> if n < count && f c then Just (n+1) else Nothing)
+
 -- Parse the sequence of `#` characters that begins an ATX
 -- header, and return the number of characters.  We require
 -- a space after the initial string of `#`s, as not all markdown
@@ -435,9 +418,10 @@ nfbChar c = nfb (skip (==c))
 -- a header.
 parseAtxHeaderStart :: Parser Int
 parseAtxHeaderStart = do
-  hashes <- takeWhile1 (=='#')
+  char '#'
+  hashes <- upToCountChars 5 (== '#')
   scanSpace <|> scanBlankline
-  return $ T.length hashes
+  return $ T.length hashes + 1
 
 parseSetextHeaderLine :: Parser Int
 parseSetextHeaderLine = do
@@ -452,7 +436,6 @@ parseSetextHeaderLine = do
 -- spaces between the hyphens or asterisks."
 scanHRuleLine :: Scanner
 scanHRuleLine = do
-  scanNonindentSpaces
   c <- satisfy $ inClass "*_-"
   count 2 $ scanSpaces >> char c
   skipWhile (\x -> x == ' ' || x == c)
@@ -462,7 +445,6 @@ scanHRuleLine = do
 -- the fence part and the rest (after any spaces).
 parseCodeFence :: Parser ContainerType
 parseCodeFence = do
-  scanNonindentSpaces
   c <- satisfy $ inClass "`~"
   count 2 (char c)
   extra <- takeWhile (== c)
@@ -507,11 +489,6 @@ parseListNumber = do
          <|> ParenFollowing <$ skip (== ')')
     scanSpace <|> scanBlankline
     return $ ListItem { listType = Numbered wrap num, listIndent = ind + length (show num) + 1 }
-
--- Scan the beginning of a reference block: a bracketed label
--- followed by a colon.  We assume that the label is on one line.
-scanReference :: Scanner
-scanReference = scanNonindentSpaces >> pLinkLabel >> scanChar ':'
 
 -- Returns tag type and whole tag.
 pHtmlTag :: Parser (HtmlTagType, Text)
@@ -621,7 +598,6 @@ pLinkTitle = do
 -- and an optional link title.
 pReference :: Parser Leaf
 pReference = do
-  scanNonindentSpaces
   lab <- pLinkLabel
   char ':'
   scanSpnl

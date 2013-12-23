@@ -75,7 +75,7 @@ showElt (L _ (TextLine s)) = show s
 showElt (L _ lf) = show lf
 
 data Leaf = TextLine Text
-          | BlankLine
+          | BlankLine Text
           | ATXHeader Int Text
           | SetextHeader Int Text
           | Rule
@@ -101,7 +101,7 @@ processElts refmap (L _lineNumber lf : rest) =
                      (textlines, rest') = span isTextLine rest
                      isTextLine (L _ (TextLine _)) = True
                      isTextLine _ = False
-    BlankLine -> processElts refmap rest
+    BlankLine{} -> processElts refmap rest
     ATXHeader lvl t -> singleton (Header lvl $ parseInlines refmap t) <>
                        processElts refmap rest
     SetextHeader lvl t -> singleton (Header lvl $ parseInlines refmap t) <>
@@ -144,14 +144,14 @@ processElts refmap (C (Container ct cs) : rest) =
     IndentedCode -> singleton (CodeBlock (CodeAttr Nothing) txt)
                     <> processElts refmap rest'
                   where txt = T.unlines $ map extractCode cbs'
-                        extractCode (L _ BlankLine) = ""
+                        extractCode (L _ (BlankLine t)) = t
                         extractCode (C (Container IndentedCode cs)) =
                           joinLines $ map extractText $ toList cs
                         extractCode _ = ""
                         cbs' = stripTrailingBlanks cbs
                         (cbs, rest') = span isIndentedCodeOrBlank
                                        (C (Container ct cs) : rest)
-                        isIndentedCodeOrBlank (L _ BlankLine) = True
+                        isIndentedCodeOrBlank (L _ BlankLine{}) = True
                         isIndentedCodeOrBlank (C (Container IndentedCode _))
                                                               = True
                         isIndentedCodeOrBlank _               = False
@@ -161,7 +161,7 @@ processElts refmap (C (Container ct cs) : rest) =
                   where txt = openingHtml' <>
                                joinLines (map extractText (toList cs))
 
-   where isBlankLine (L _ BlankLine) = True
+   where isBlankLine (L _ BlankLine{}) = True
          isBlankLine _ = False
          stripTrailingBlanks = reverse . dropWhile isBlankLine . reverse
 
@@ -199,9 +199,9 @@ addLeaf :: LineNumber -> Leaf -> ContainerM ()
 addLeaf lineNum lf = do
   ContainerStack top rest <- get
   case (top, lf) of
-        (Container ct@(ListItem{}) cs, BlankLine) ->
+        (Container ct@(ListItem{}) cs, BlankLine{}) ->
           case viewr cs of
-            (cs' :> L _ BlankLine) -> -- two blanks break out of list item:
+            (cs' :> L _ BlankLine{}) -> -- two blanks break out of list item:
                  closeContainer >> addLeaf lineNum lf
             _ -> put $ ContainerStack (Container ct (cs |> L lineNum lf)) rest
         (Container ct cs, _) ->
@@ -240,7 +240,7 @@ containerize lastLineIsText t =
              then (,) <$> pure regContainers <*> leaf lastLineIsText
              else (,) <$> pure (regContainers ++ verbatimContainers) <*>
                             textLineOrBlank
-        textLineOrBlank = (BlankLine <$ (skipWhile (==' ') <* endOfInput))
+        textLineOrBlank = (BlankLine <$> (takeWhile (==' ') <* endOfInput))
                             <|> (TextLine <$> takeText)
 
 containerStart :: Bool -> Parser ContainerType
@@ -249,10 +249,11 @@ containerStart _lastLineIsText =
   <|> parseListMarker
 
 verbatimContainerStart :: Bool -> Parser ContainerType
-verbatimContainerStart lastLineIsText =
-      parseCodeFence
+verbatimContainerStart lastLineIsText = nfb scanBlankline *>
+   (  parseCodeFence
   <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
   <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$> parseHtmlBlockStart))
+   )
 
 leaf :: Bool -> Parser Leaf
 leaf lastLineIsText = scanNonindentSpace *> (
@@ -260,7 +261,7 @@ leaf lastLineIsText = scanNonindentSpace *> (
   <|> (guard lastLineIsText *> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty))
   <|> (Rule <$ scanHRuleLine)
   <|> (guard (not lastLineIsText) *> pReference)
-  <|> (BlankLine <$ (skipWhile (==' ') <* endOfInput))
+  <|> (BlankLine <$> (takeWhile (==' ') <* endOfInput))
   <|> (TextLine <$> takeText)
   )
 
@@ -298,7 +299,7 @@ processLine (lineNumber, txt) = do
            mapM_ addContainer ns
            case (reverse ns, lf) of
              -- don't add blank line at beginning of fenced code or html block
-             (FencedCode{}:_,  BlankLine) -> return ()
+             (FencedCode{}:_,  BlankLine{}) -> return ()
              (_, Reference{ referenceLabel = lab,
                             referenceURL = url,
                             referenceTitle = tit }) ->

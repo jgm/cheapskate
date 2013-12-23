@@ -120,19 +120,12 @@ processElts refmap (C (Container ct cs) : rest) =
               where xs = takeListItems rest
                     rest' = drop (length xs) rest
                     takeListItems (C c@(Container (ListItem _ lt') cs') : zs)
-                      | listTypesMatch lt' listType' =
-                        if endsWithTwoBlanks cs'
-                           then [c]
-                           else c : takeListItems zs
+                      | listTypesMatch lt' listType' = c : takeListItems zs
                       | otherwise = []
                     takeListItems _ = []
                     listTypesMatch (Bullet c1) (Bullet c2) = c1 == c2
                     listTypesMatch (Numbered w1 _) (Numbered w2 _) = w1 == w2
                     listTypesMatch _ _ = False
-                    endsWithTwoBlanks cs' =
-                        case reverse (toList cs') of
-                             (L _ BlankLine : L _ BlankLine : _) -> True
-                             _                                   -> False
                     items = mapMaybe getItem (Container ct cs : xs)
                     getItem (Container ListItem{} cs) = Just $ toList cs
                     getItem _                         = Nothing
@@ -206,12 +199,14 @@ closeContainer = do
 addLeaf :: LineNumber -> Leaf -> ContainerM ()
 addLeaf lineNum lf = do
   ContainerStack top rest <- get
-  put $ case (top, lf) of
-        (Container ct cs, TextLine _) ->
+  case (top, lf) of
+        (Container ct@(ListItem{}) cs, BlankLine) ->
           case viewr cs of
-            (cs' :> L _ (TextLine _)) -> ContainerStack (Container ct (cs |> L lineNum lf)) rest
-            _ -> ContainerStack (Container ct (cs |> L lineNum lf)) rest
-        (Container ct cs, c) -> ContainerStack (Container ct (cs |> L lineNum c)) rest
+            (cs' :> L _ BlankLine) -> -- two blanks break out of list item:
+                 closeContainer >> addLeaf lineNum lf
+            _ -> put $ ContainerStack (Container ct (cs |> L lineNum lf)) rest
+        (Container ct cs, _) ->
+                 put $ ContainerStack (Container ct (cs |> L lineNum lf)) rest
 
 addContainer :: ContainerType -> ContainerM ()
 addContainer ct = modify $ \(ContainerStack top rest) ->

@@ -225,7 +225,7 @@ tryScanners (c:cs) colnum t =
        Left _err  -> (t, length (c:cs))
   where scanner = case containerType c of
                        BlockQuote     -> scanBlockquoteStart
-                       IndentedCode   -> scanIndentSpace
+                       IndentedCode   -> scanIndentSpace *> nfb scanBlankline
                        RawHtmlBlock{} -> nfb scanBlankline
                        ListItem{ listIndent = n }
                                       -> scanBlankline
@@ -245,7 +245,9 @@ containerize lastLineIsText t =
           if null verbatimContainers
              then (,) <$> pure regContainers <*> leaf lastLineIsText
              else (,) <$> pure (regContainers ++ verbatimContainers) <*>
-                            (TextLine <$> takeText)
+                            textLineOrBlank
+        textLineOrBlank = (BlankLine <$ (skipWhile (==' ') <* endOfInput))
+                            <|> (TextLine <$> takeText)
 
 containerStart :: Bool -> Parser ContainerType
 containerStart _lastLineIsText =
@@ -301,7 +303,7 @@ processLine (lineNumber, txt) = do
            mapM_ addContainer ns
            case (reverse ns, lf) of
              -- don't add blank line at beginning of fenced code or html block
-             (FencedCode{}:_,  TextLine "") -> return ()
+             (FencedCode{}:_,  BlankLine) -> return ()
              (_, Reference{ referenceLabel = lab,
                             referenceURL = url,
                             referenceTitle = tit }) ->

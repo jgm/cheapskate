@@ -1,9 +1,10 @@
+SHELL=/bin/bash
 TESTDIR ?= *
 PATT ?= .
 TESTS=$(shell ls $(TESTDIR)/*.markdown | grep $(PATT))
 DIFFS=$(patsubst %.markdown,%.diff,$(TESTS))
 PROG ?= ../dist/build/markdown/markdown
-FILTER ?= ../showspace
+FILTER ?= perl -pe 's/ /␣/g'
 TIDYCMD ?= tidy -asxhtml -utf8 --show-body-only yes --show-warnings no -quiet
 DETAILS ?= 1
 
@@ -25,9 +26,9 @@ all: $(DIFFS)
 
 %.actual.html: %.markdown
 ifeq ($(TIDY),1)
-	-cat $< | $(PROG) | $(FILTER) | $(TIDYCMD) > $@
+	-cat $< | $(PROG) | $(TIDYCMD) > $@
 else
-	-cat $< | $(PROG) | $(FILTER) > $@
+	-cat $< | $(PROG) > $@
 endif
 
 %.expected.html: %.html
@@ -38,7 +39,7 @@ else
 endif
 
 %.diff: %.expected.html %.actual.html
-	diff --unified=1 $+ > $@ ; \
+	diff --unified=1 <(cat $(word 1,$^) | $(FILTER)) <(cat $(word 2,$^) | $(FILTER)) > $@ ; \
 	  if [ -s $@ ]; then \
 		$(ECHO)  "\033[1;31m✘ $(patsubst %.diff,%,$@)\033[0m"; \
 		if [ $(DETAILS) == "1" ]; then \

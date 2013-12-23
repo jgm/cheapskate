@@ -133,8 +133,14 @@ processElts refmap (C (Container ct cs) : rest) =
                           reverse $ case reverse items of
                                          (w:ws) -> stripTrailingBlanks w : ws
                                          []     -> []
-                    isTight = not $ any (any isBlankLine)
+                    isTight = not $ any itemWithBlankLine
                               itemsMinusTrailingBlanks
+                    -- this first case is an empty tight list item:
+                    -- - x
+                    -- -
+                    -- - y
+                    itemWithBlankLine [L _ (BlankLine _)] = False
+                    itemWithBlankLine its = any isBlankLine its
     FencedCode fence' info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
                   where txt = joinLines $ map extractText $ toList cs

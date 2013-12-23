@@ -5,11 +5,11 @@ import qualified Data.Set as Set
 import Prelude hiding (takeWhile)
 import Data.Maybe (mapMaybe)
 import Data.Attoparsec.Text as Attoparsec
-import Data.List (foldl', intercalate, intersperse)
+import Data.List (intercalate, intersperse)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Monoid
-import Data.Foldable (toList, foldMap)
+import Data.Foldable (toList)
 import Data.Sequence (Seq, (<|), (|>), viewr, ViewR(..), singleton)
 import qualified Data.Sequence as Seq
 import Network.URI (parseURI, isAllowedInURI, escapeURIString)
@@ -137,18 +137,20 @@ processElts refmap (C (Container ct cs) : rest) =
                               itemsMinusTrailingBlanks
     FencedCode fence' info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
-                  where txt = T.unlines $ map extractText $ toList cs
+                  where txt = joinLines $ map extractText $ toList cs
                         attr = case T.words info' of
                                   []    -> CodeAttr Nothing
                                   (w:_) -> CodeAttr (Just w)
     IndentedCode -> singleton (CodeBlock (CodeAttr Nothing) txt)
                     <> processElts refmap rest'
-                  where txt = T.unlines $ map extractCode cbs'
-                        extractCode (L _ (BlankLine t)) = t
+                  where txt = joinLines $ stripTrailingEmpties
+                              $ concatMap extractCode cbs
+                        stripTrailingEmpties = reverse .
+                          dropWhile (T.all (==' ')) . reverse
+                        extractCode (L _ (BlankLine t)) = [t]
                         extractCode (C (Container IndentedCode cs)) =
-                          joinLines $ map extractText $ toList cs
-                        extractCode _ = ""
-                        cbs' = stripTrailingBlanks cbs
+                          map extractText $ toList cs
+                        extractCode _ = []
                         (cbs, rest') = span isIndentedCodeOrBlank
                                        (C (Container ct cs) : rest)
                         isIndentedCodeOrBlank (L _ BlankLine{}) = True
@@ -219,7 +221,7 @@ tryScanners (c:cs) colnum t =
        Left _err  -> (t, length (c:cs))
   where scanner = case containerType c of
                        BlockQuote     -> scanBlockquoteStart
-                       IndentedCode   -> scanIndentSpace *> nfb scanBlankline
+                       IndentedCode   -> scanIndentSpace
                        RawHtmlBlock{} -> nfb scanBlankline
                        ListItem{ listIndent = n }
                                       -> scanBlankline
@@ -240,8 +242,11 @@ containerize lastLineIsText t =
              then (,) <$> pure regContainers <*> leaf lastLineIsText
              else (,) <$> pure (regContainers ++ verbatimContainers) <*>
                             textLineOrBlank
-        textLineOrBlank = (BlankLine <$> (takeWhile (==' ') <* endOfInput))
-                            <|> (TextLine <$> takeText)
+textLineOrBlank :: Parser Leaf
+textLineOrBlank = consolidate <$> takeText
+  where consolidate ts = if T.all (==' ') ts
+                            then BlankLine ts
+                            else TextLine ts
 
 containerStart :: Bool -> Parser ContainerType
 containerStart _lastLineIsText =
@@ -261,8 +266,7 @@ leaf lastLineIsText = scanNonindentSpace *> (
   <|> (guard lastLineIsText *> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty))
   <|> (Rule <$ scanHRuleLine)
   <|> (guard (not lastLineIsText) *> pReference)
-  <|> (BlankLine <$> (takeWhile (==' ') <* endOfInput))
-  <|> (TextLine <$> takeText)
+  <|> textLineOrBlank
   )
 
 processLine :: (LineNumber, Text) -> ContainerM ()
@@ -406,8 +410,8 @@ nfbChar :: Char -> Scanner
 nfbChar c = nfb (skip (==c))
 
 upToCountChars :: Int -> (Char -> Bool) -> Parser Text
-upToCountChars count f =
-  Attoparsec.scan 0 (\n c -> if n < count && f c then Just (n+1) else Nothing)
+upToCountChars cnt f =
+  Attoparsec.scan 0 (\n c -> if n < cnt && f c then Just (n+1) else Nothing)
 
 -- Parse the sequence of `#` characters that begins an ATX
 -- header, and return the number of characters.  We require

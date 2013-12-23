@@ -153,12 +153,12 @@ processElts refmap (C (Container ct cs) : rest) =
     IndentedCode -> singleton (CodeBlock (CodeAttr Nothing) txt)
                     <> processElts refmap rest'
                   where txt = T.unlines $ map extractCode cbs'
+                        extractCode (L _ BlankLine) = ""
                         extractCode (C (Container IndentedCode cs)) =
                           joinLines $ map extractText $ toList cs
-                        extractCode (L _ BlankLine) = ""
                         extractCode _ = ""
                         cbs' = case reverse cbs of
-                                    (L _ BlankLine : _) -> init cbs
+                                    ((L _ BlankLine) : _) -> init cbs
                                     _ -> cbs
                         (cbs, rest') = span isIndentedCodeOrBlank
                                        (C (Container ct cs) : rest)
@@ -234,20 +234,25 @@ tryScanners (c:cs) colnum t =
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)
 containerize lastLineIsText t =
-  case parseOnly ((,,) <$> many (containerStart lastLineIsText)
-                       <*> (option [] $ count 1
-                                      $ textContainerStart lastLineIsText)
-                       <*> leaf lastLineIsText) t of
-       Right (cs,tcs,t') -> (cs ++ tcs, t')
-       Left err          -> error err
+  case parseOnly newContainers t of
+       Right (cs,t') -> (cs, t')
+       Left err      -> error err
+  where newContainers = do
+          regContainers <- many (containerStart lastLineIsText)
+          verbatimContainers <- option []
+                            $ count 1 (verbatimContainerStart lastLineIsText)
+          if null verbatimContainers
+             then (,) <$> pure regContainers <*> leaf lastLineIsText
+             else (,) <$> pure (regContainers ++ verbatimContainers) <*>
+                            (TextLine <$> takeText)
 
 containerStart :: Bool -> Parser ContainerType
-containerStart lastLineIsText =
+containerStart _lastLineIsText =
       (BlockQuote <$ scanBlockquoteStart)
   <|> parseListMarker
 
-textContainerStart :: Bool -> Parser ContainerType
-textContainerStart lastLineIsText =
+verbatimContainerStart :: Bool -> Parser ContainerType
+verbatimContainerStart lastLineIsText =
       parseCodeFence
   <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
   <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$> parseHtmlBlockStart))
@@ -295,7 +300,7 @@ processLine (lineNumber, txt) = do
            mapM_ addContainer ns
            case (reverse ns, lf) of
              -- don't add blank line at beginning of fenced code block
-             (FencedCode{}:_,  BlankLine) -> return ()
+             (FencedCode{}:_,  TextLine "") -> return ()
              (_, Reference{ referenceLabel = lab,
                             referenceURL = url,
                             referenceTitle = tit }) ->

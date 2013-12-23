@@ -3,6 +3,7 @@ PATT ?= .
 TESTS=$(shell ls $(TESTDIR)/*.markdown | grep $(PATT))
 DIFFS=$(patsubst %.markdown,%.diff,$(TESTS))
 PROG ?= ../dist/build/markdown/markdown
+FILTER ?= ../showspace
 TIDYCMD ?= tidy -asxhtml -utf8 --show-body-only yes --show-warnings no -quiet
 DETAILS ?= 1
 
@@ -24,9 +25,9 @@ all: $(DIFFS)
 
 %.actual.html: %.markdown
 ifeq ($(TIDY),1)
-	-cat $< | $(PROG) | $(TIDYCMD) > $@
+	-cat $< | $(PROG) | $(FILTER) | $(TIDYCMD) > $@
 else
-	$(PROG) < $< > $@
+	-cat $< | $(PROG) | $(FILTER) > $@
 endif
 
 %.expected.html: %.html

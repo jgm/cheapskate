@@ -96,7 +96,7 @@ processElts refmap (L _lineNumber lf : rest) =
   case lf of
     TextLine t -> singleton (Para $ parseInlines refmap txt) <>
                   processElts refmap rest'
-               where txt = joinLines $ map T.stripStart
+               where txt = T.stripEnd $ joinLines $ map T.stripStart
                            $ t : map extractText textlines
                      (textlines, rest') = span isTextLine rest
                      isTextLine (L _ (TextLine _)) = True

@@ -146,13 +146,13 @@ processElts refmap (C (Container ct cs) : rest) =
                                     [] -> False
     FencedCode fence' info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
-                  where txt = joinLines $ map extractText $ toList cs
+                  where txt = T.unlines $ map extractText $ toList cs
                         attr = case T.words info' of
                                   []    -> CodeAttr Nothing
                                   (w:_) -> CodeAttr (Just w)
     IndentedCode -> singleton (CodeBlock (CodeAttr Nothing) txt)
                     <> processElts refmap rest'
-                  where txt = joinLines $ map extractCode cbs'
+                  where txt = T.unlines $ map extractCode cbs'
                         extractCode (C (Container IndentedCode cs)) =
                           joinLines $ map extractText $ toList cs
                         extractCode (L _ BlankLine) = ""
@@ -169,7 +169,7 @@ processElts refmap (C (Container ct cs) : rest) =
 
     RawHtmlBlock openingHtml' -> singleton (HtmlBlock txt) <>
                                  processElts refmap rest
-                  where txt = joinLines $ openingHtml' : map extractText
+                  where txt = T.unlines $ openingHtml' : map extractText
                               (toList cs)
 
   -- recursively generate blocks

@@ -166,8 +166,8 @@ processElts refmap (C (Container ct cs) : rest) =
 
     RawHtmlBlock openingHtml' -> singleton (HtmlBlock txt) <>
                                  processElts refmap rest
-                  where txt = T.unlines $ openingHtml' : map extractText
-                              (toList cs)
+                  where txt = openingHtml' <>
+                               joinLines (map extractText (toList cs))
 
    where isBlankLine (L _ BlankLine) = True
          isBlankLine _ = False
@@ -300,7 +300,7 @@ processLine (lineNumber, txt) = do
            replicateM numUnmatched closeContainer
            mapM_ addContainer ns
            case (reverse ns, lf) of
-             -- don't add blank line at beginning of fenced code block
+             -- don't add blank line at beginning of fenced code or html block
              (FencedCode{}:_,  TextLine "") -> return ()
              (_, Reference{ referenceLabel = lab,
                             referenceURL = url,

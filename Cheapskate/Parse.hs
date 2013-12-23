@@ -138,8 +138,6 @@ processElts refmap (C (Container ct cs) : rest) =
                       let csL = toList cs in
                       Just (length (filter isBlankLine csL), csL)
                     getItem _                         = Nothing
-                    isBlankLine (L _ BlankLine) = True
-                    isBlankLine _ = False
                     items' = map (processElts refmap . snd) items
                     isTight = case reverse (map fst items) of
                                     (w:ws) -> w <= 1 && all (==0) ws
@@ -157,9 +155,7 @@ processElts refmap (C (Container ct cs) : rest) =
                         extractCode (C (Container IndentedCode cs)) =
                           joinLines $ map extractText $ toList cs
                         extractCode _ = ""
-                        cbs' = case reverse cbs of
-                                    ((L _ BlankLine) : _) -> init cbs
-                                    _ -> cbs
+                        cbs' = reverse $ dropWhile isBlankLine $ reverse cbs
                         (cbs, rest') = span isIndentedCodeOrBlank
                                        (C (Container ct cs) : rest)
                         isIndentedCodeOrBlank (L _ BlankLine) = True
@@ -171,6 +167,9 @@ processElts refmap (C (Container ct cs) : rest) =
                                  processElts refmap rest
                   where txt = T.unlines $ openingHtml' : map extractText
                               (toList cs)
+
+   where isBlankLine (L _ BlankLine) = True
+         isBlankLine _ = False
 
   -- recursively generate blocks
   -- this requrse grouping text lines into paragraphs,

@@ -456,14 +456,17 @@ parseCodeFence = do
 -- Parse the start of an HTML block:  either an HTML tag or an
 -- HTML comment, with no indentation.
 parseHtmlBlockStart :: Parser Text
-parseHtmlBlockStart = (   (do t <- pHtmlTag
-                              guard $ f $ fst t
-                              return $ snd t)
-                     <|> string "<!--"
-                     <|> string "-->" )
-  where f (Opening name) = name `Set.member` blockHtmlTags
-        f (SelfClosing name) = name `Set.member` blockHtmlTags
-        f (Closing name) = name `Set.member` blockHtmlTags
+parseHtmlBlockStart = do
+  initial <- (   (do t <- pHtmlTag
+                     guard $ f $ fst t
+                     return $ snd t)
+               <|> string "<!--"
+               <|> string "-->" )
+  rest <- takeText
+  return (initial <> rest)
+ where f (Opening name) = name `Set.member` blockHtmlTags
+       f (SelfClosing name) = name `Set.member` blockHtmlTags
+       f (Closing name) = name `Set.member` blockHtmlTags
 
 -- Parse a list marker and return the list type.
 parseListMarker :: Parser ContainerType

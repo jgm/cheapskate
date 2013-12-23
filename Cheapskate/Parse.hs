@@ -272,10 +272,11 @@ leaf lastLineIsText = scanNonindentSpace *> (
 processLine :: (LineNumber, Text) -> ContainerM ()
 processLine (lineNumber, txt) = do
   ContainerStack top@(Container ct cs) rest <- get
-  let lastLineIsText = case viewr cs of
+  let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 txt
+  let lastLineIsText = numUnmatched == 0 &&
+                       case viewr cs of
                             (_ :> L _ (TextLine _)) -> True
                             _                       -> False
-  let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 txt
   case ct of
     RawHtmlBlock{} | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     IndentedCode   | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')

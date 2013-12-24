@@ -18,15 +18,14 @@ import qualified Data.Map as M
 import Cheapskate.Types
 import Control.Applicative
 
-import Debug.Trace
-tr' s x = trace (s ++ ": " ++ show x) x
+-- import Debug.Trace
+-- tr' s x = trace (s ++ ": " ++ show x) x
 
 parseMarkdown :: Text -> Blocks
 parseMarkdown = processDocument . processLines
 
-data ContainerStack = ContainerStack { stackTop  :: Container
-                                     , stackRest :: [Container]
-                                     }
+data ContainerStack =
+  ContainerStack Container {- top -} [Container] {- rest -}
 
 type ReferenceMap = M.Map Text (Text, Text)
 -- Link references are case sensitive and ignore line breaks
@@ -63,8 +62,8 @@ data ContainerType = Document
                    deriving (Eq, Show)
 
 instance Show Container where
-  show (Container ct cs) =
-    show ct ++ "\n" ++ nest 2 (intercalate "\n" (map showElt $ toList cs))
+  show c = show (containerType c) ++ "\n" ++
+    nest 2 (intercalate "\n" (map showElt $ toList $ children c))
 
 nest :: Int -> String -> String
 nest num = intercalate "\n" . map ((replicate num ' ') ++) . lines
@@ -107,7 +106,7 @@ processElts refmap (L _lineNumber lf : rest) =
     SetextHeader lvl t -> singleton (Header lvl $ parseInlines refmap t) <>
                           processElts refmap rest
     Rule -> singleton HRule <> processElts refmap rest
-    Reference lab url tit -> processElts refmap rest
+    Reference{} -> processElts refmap rest
 
 processElts refmap (C (Container ct cs) : rest) =
   case ct of
@@ -118,7 +117,7 @@ processElts refmap (C (Container ct cs) : rest) =
         singleton (List isTight listType' items') <> processElts refmap rest'
               where xs = takeListItems rest
                     rest' = drop (length xs) rest
-                    takeListItems (C c@(Container (ListItem _ lt') cs') : zs)
+                    takeListItems (C c@(Container (ListItem _ lt') _) : zs)
                       | listTypesMatch lt' listType' = c : takeListItems zs
                       | otherwise = []
                     takeListItems _ = []
@@ -126,7 +125,7 @@ processElts refmap (C (Container ct cs) : rest) =
                     listTypesMatch (Numbered w1 _) (Numbered w2 _) = w1 == w2
                     listTypesMatch _ _ = False
                     items = mapMaybe getItem (Container ct cs : xs)
-                    getItem (Container ListItem{} cs) = Just $ toList cs
+                    getItem (Container ListItem{} cs') = Just $ toList cs'
                     getItem _                         = Nothing
                     items' = map (processElts refmap) items
                     itemsMinusTrailingBlanks =
@@ -141,7 +140,7 @@ processElts refmap (C (Container ct cs) : rest) =
                     -- - y
                     itemWithBlankLine [L _ (BlankLine _)] = False
                     itemWithBlankLine its = any isBlankLine its
-    FencedCode fence' info' -> singleton (CodeBlock attr txt) <>
+    FencedCode _ info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
                   where txt = joinLines $ map extractText $ toList cs
                         attr = case T.words info' of
@@ -154,8 +153,8 @@ processElts refmap (C (Container ct cs) : rest) =
                         stripTrailingEmpties = reverse .
                           dropWhile (T.all (==' ')) . reverse
                         extractCode (L _ (BlankLine t)) = [t]
-                        extractCode (C (Container IndentedCode cs)) =
-                          map extractText $ toList cs
+                        extractCode (C (Container IndentedCode cs')) =
+                          map extractText $ toList cs'
                         extractCode _ = []
                         (cbs, rest') = span isIndentedCodeOrBlank
                                        (C (Container ct cs) : rest)
@@ -164,8 +163,8 @@ processElts refmap (C (Container ct cs) : rest) =
                                                               = True
                         isIndentedCodeOrBlank _               = False
 
-    RawHtmlBlock openingHtml' -> singleton (HtmlBlock txt) <>
-                                 processElts refmap rest
+    RawHtmlBlock{ openingHtml = openingHtml' } ->
+                        singleton (HtmlBlock txt) <> processElts refmap rest
                   where txt = openingHtml' <>
                                joinLines (map extractText (toList cs))
 
@@ -209,7 +208,7 @@ addLeaf lineNum lf = do
   case (top, lf) of
         (Container ct@(ListItem{}) cs, BlankLine{}) ->
           case viewr cs of
-            (cs' :> L _ BlankLine{}) -> -- two blanks break out of list item:
+            (_ :> L _ BlankLine{}) -> -- two blanks break out of list item:
                  closeContainer >> addLeaf lineNum lf
             _ -> put $ ContainerStack (Container ct (cs |> L lineNum lf)) rest
         (Container ct cs, _) ->
@@ -299,8 +298,8 @@ processLine (lineNumber, txt) = do
   case ct of
     RawHtmlBlock{} | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     IndentedCode   | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
-    FencedCode{ fence = fence } ->  -- here we don't check numUnmatched because we allow laziness
-      if fence `T.isPrefixOf` t'
+    FencedCode{ fence = fence' } ->  -- here we don't check numUnmatched because we allow laziness
+      if fence' `T.isPrefixOf` t'
          -- closing code fence
          then closeContainer
          else addLeaf lineNumber (TextLine t')
@@ -308,7 +307,7 @@ processLine (lineNumber, txt) = do
        ([], TextLine t) ->
          case viewr cs of
             -- lazy continuation?
-            (cs' :> L _ (TextLine _))
+            (_ :> L _ (TextLine _))
               | ct /= IndentedCode -> addLeaf lineNumber (TextLine t)
             _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
        ([], SetextHeader lev _) | numUnmatched == 0 ->

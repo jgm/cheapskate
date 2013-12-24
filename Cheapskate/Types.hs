@@ -1,7 +1,6 @@
 module Cheapskate.Types where
 import Data.Sequence (Seq)
 import Data.Text (Text)
-import Data.Monoid
 
 -- Structured representation of a document.
 

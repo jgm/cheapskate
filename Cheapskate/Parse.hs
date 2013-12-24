@@ -244,9 +244,7 @@ tryScanners (c:cs) colnum t =
                                       --
                                       --        code
                                       <|> () <$
-                                           (string (T.replicate (n + 1) " ")
-                                             *> upToCountChars
-                                                 (listMarkerWidth lt) (==' '))
+                                           (string (T.replicate (n + 1) " "))
                        _              -> return ()
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)

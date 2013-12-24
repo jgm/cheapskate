@@ -7,7 +7,6 @@ import qualified Text.Blaze.Html.Renderer.Text as BT
 import Text.Blaze.Html hiding(contents)
 import Data.Monoid
 import Data.Foldable (foldMap, toList)
-import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import Data.List (intersperse)
 
@@ -39,14 +38,11 @@ renderBlocks = mconcat . intersperse blocksep . map renderBlock . toList
           where base = H.ol $ nl <> mapM_ (li tight) items
         renderBlock (HtmlBlock raw) = H.preEscapedToMarkup raw
         li :: Bool -> Blocks -> Html  -- tight list handling
-        li True bs = case toList bs of
-                          [Para zs]         -> H.li (renderInlines zs) <> nl
-                          [Para zs, List{}] -> H.li (renderInlines zs <>
-                             nl <> renderBlocks (Seq.drop 1 bs)) <> nl
-                          _                 -> toLi bs
-                          -- An item in a tight list with multiple paragraphs
-                          -- will be rendered as in a loose list.
-        li False bs = toLi bs
+        li True = (<> nl) . H.li . mconcat . intersperse blocksep .
+                      map renderBlockTight . toList
+        li False = toLi
+        renderBlockTight (Para zs) = renderInlines zs
+        renderBlockTight x         = renderBlock x
         toLi x = (H.li $ renderBlocks x) <> nl
         nl = "\n"
         blocksep = "\n"

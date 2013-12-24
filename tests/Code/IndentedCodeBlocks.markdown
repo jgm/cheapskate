@@ -5,9 +5,13 @@ Indented code with two space indent in first and last line:
 
       and
 
-Indented code with no leading/trailing blank line:
+Indented code requires a leading/trailing blank line:
     quick-command --option "$*"
-and more.
+
+Indented code does not require a trailing blank line:
+
+    code
+and not code.
 
 Code in blockquote:
 

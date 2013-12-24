@@ -24,7 +24,7 @@ bench:
 
 linecount:
 	@echo "Non-comment, non-blank lines:" ; \
-	grep '^[^-]' Cheapskate.hs | wc -l
+	grep '^[^-]' Cheapskate.hs Cheapskate/*.hs | wc -l
 
 clean:
 	cabal clean && make -C tests clean

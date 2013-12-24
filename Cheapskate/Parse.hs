@@ -231,8 +231,14 @@ tryScanners (c:cs) colnum t =
                        RawHtmlBlock{} -> nfb scanBlankline
                        ListItem{ listIndent = n }
                                       -> scanBlankline
-                                      <|> () <$ string (T.replicate n " ")
-                                      -- <|> () <$ parseListMarker
+                                      -- we require indent past marker,
+                                      -- but allow an extra space so indented
+                                      -- code begins where it should:
+                                      -- 1. foobar
+                                      --
+                                      --        code
+                                      <|> (string (T.replicate n " ")
+                                            *> option () (skip (==' ')))
                        _              -> return ()
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)

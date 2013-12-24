@@ -73,6 +73,13 @@ showElt (C c) = show c
 showElt (L _ (TextLine s)) = show s
 showElt (L _ lf) = show lf
 
+listMarkerWidth :: ListType -> Int
+listMarkerWidth (Bullet _) = 1
+listMarkerWidth (Numbered _ n) | n < 10    = 1
+                               | n < 100   = 2
+                               | n < 1000  = 3
+                               | otherwise = 4
+
 data Leaf = TextLine Text
           | BlankLine Text
           | ATXHeader Int Text
@@ -228,7 +235,7 @@ tryScanners (c:cs) colnum t =
                        BlockQuote     -> scanBlockquoteStart
                        IndentedCode   -> scanIndentSpace
                        RawHtmlBlock{} -> nfb scanBlankline
-                       ListItem{ listIndent = n }
+                       ListItem{ listIndent = n, listType = lt }
                                       -> scanBlankline
                                       -- we require indent past marker,
                                       -- but allow an extra space so indented
@@ -236,8 +243,10 @@ tryScanners (c:cs) colnum t =
                                       -- 1. foobar
                                       --
                                       --        code
-                                      <|> (string (T.replicate n " ")
-                                            *> option () (skip (==' ')))
+                                      <|> () <$
+                                           (string (T.replicate (n + 1) " ")
+                                             *> upToCountChars
+                                                 (listMarkerWidth lt) (==' '))
                        _              -> return ()
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)
@@ -505,7 +514,7 @@ parseBullet = do
   unless (c == '+')
     $ nfb $ (count 2 $ scanSpaces >> skip (== c)) >>
           skipWhile (\x -> x == ' ' || x == c) >> endOfInput -- hrule
-  return $ ListItem { listType = Bullet c, listIndent = ind + 1 }
+  return $ ListItem { listType = Bullet c, listIndent = ind }
 
 -- Parse a list number marker and return list type.
 parseListNumber :: Parser ContainerType
@@ -515,7 +524,7 @@ parseListNumber = do
     wrap <-  PeriodFollowing <$ skip (== '.')
          <|> ParenFollowing <$ skip (== ')')
     scanSpace <|> scanBlankline
-    return $ ListItem { listType = Numbered wrap num, listIndent = ind + length (show num) + 1 }
+    return $ ListItem { listType = Numbered wrap num, listIndent = ind }
 
 -- Returns tag type and whole tag.
 pHtmlTag :: Parser (HtmlTagType, Text)

@@ -12,7 +12,7 @@ import Data.Monoid
 import Data.Foldable (toList)
 import Data.Sequence (Seq, (<|), (|>), viewr, ViewR(..), singleton)
 import qualified Data.Sequence as Seq
-import Network.URI (parseURI, isAllowedInURI, escapeURIString)
+import Network.URI (escapeURIString)
 import Control.Monad.RWS
 import qualified Data.Map as M
 import Cheapskate.Types
@@ -708,16 +708,6 @@ pStr = do
          | c >= 'a' && c <= 'z' = True
          | c >= 'A' && c <= 'Z' = True
          | c >= '0' && c <= '9' = True
-       isWordChar ':' = False -- otherwise URL detection breaks
-       isWordChar ',' = True  -- but we allow other punctuation
-       isWordChar '.' = True
-       isWordChar '-' = True
-       isWordChar ';' = True
-       isWordChar '(' = True
-       isWordChar ')' = True
-       isWordChar ' ' = False
-       isWordChar '\n' = False
-       isWordChar '_' = False
        isWordChar c = isAlphaNum c
 
 -- Catch all -- parse an escaped character, an escaped
@@ -769,39 +759,41 @@ schemes = [ -- unofficial
 schemeSet :: Set.Set Text
 schemeSet = Set.fromList $ schemes ++ map T.toUpper schemes
 
-isUriChar :: Char -> Bool
-isUriChar c = not (isPunctuation c) && (not (isAscii c) || isAllowedInURI c)
-
-inParens :: Parser Text
-inParens = do char '('
-              res <- takeWhile isUriChar
-              char ')'
-              return $ "(" <> res <> ")"
-
-innerPunct :: Parser Text
-innerPunct = T.singleton <$> (char '/'
-        <|> (pSatisfy isPunctuation <* nfb space <* nfb endOfInput))
-
 -- Parse a URI, using heuristics to avoid capturing final punctuation.
 pUri :: Text -> Parser Inlines
 pUri scheme = do
   char ':'
-  -- Scan non-ascii characters and ascii characters allowed in a URI.
-  -- We allow punctuation except when followed by a space, since
-  -- we don't want the trailing '.' in 'http://google.com.'
-  -- We want to allow
-  -- http://en.wikipedia.org/wiki/State_of_emergency_(disambiguation)
-  -- as a URL, while NOT picking up the closing paren in
-  -- (http://wikipedia.org)
-  -- So we include balanced parens in the URL.
-  let uriChunk = takeWhile1 isUriChar <|> inParens <|> innerPunct
-  rest <- T.concat <$> many1 uriChunk
-  -- now see if they amount to an absolute URI
-  let rawuri = scheme <> ":" <> rest
-  case parseURI (T.unpack $ escapeUri rawuri) of
-       Just uri' -> return $ singleton $ Link (singleton $ Str rawuri)
-                                  (T.pack $ show uri') (T.empty)
-       Nothing   -> fail "not a URI"
+  x <- scan (OpenParens 0) uriScanner
+  guard $ not $ T.null x
+  let (rawuri, endingpunct) =
+        case T.last x of
+             c | c `elem` ".;?!:," ->
+               (scheme <> ":" <> T.init x, singleton (Str (T.singleton c)))
+             _ -> (scheme <> ":" <> x, mempty)
+  return $ singleton (Link (singleton $ Str rawuri) rawuri mempty) <>
+           endingpunct
+
+-- Scan non-ascii characters and ascii characters allowed in a URI.
+-- We allow punctuation except when followed by a space, since
+-- we don't want the trailing '.' in 'http://google.com.'
+-- We want to allow
+-- http://en.wikipedia.org/wiki/State_of_emergency_(disambiguation)
+-- as a URL, while NOT picking up the closing paren in
+-- (http://wikipedia.org)
+-- So we include balanced parens in the URL.
+
+data OpenParens = OpenParens Int
+
+uriScanner :: OpenParens -> Char -> Maybe OpenParens
+uriScanner _ ' ' = Nothing
+uriScanner (OpenParens n) '(' = Just (OpenParens (n + 1))
+uriScanner (OpenParens n) ')'
+  | n > 0 = Just (OpenParens (n - 1))
+  | otherwise = Nothing
+uriScanner st '+' = Just st
+uriScanner st '/' = Just st
+uriScanner _ c | isSpace c = Nothing
+uriScanner st _ = Just st
 
 -- Escape a URI.
 escapeUri :: Text -> Text

@@ -40,6 +40,7 @@ instance Alternative Parser where
 
 instance Monad Parser where
   return x = Parser $ \st -> Right (st, x)
+  fail e = Parser $ \st -> Left $ ParseError (position st) e
   p >>= g = Parser $ \st ->
     case evalParser p st of
          Left e        -> Left e

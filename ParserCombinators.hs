@@ -4,13 +4,31 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Monad
 import Control.Applicative
-import Data.Monoid
 
-data ParseError = ParseError Int String deriving Show
+data Position = Position { lineNumber :: Int, columnNumber :: Int }
+
+instance Show Position where
+  show (Position ln cn) = "line " ++ show ln ++ " column " ++ show cn
+
+data ParseError = ParseError Position String deriving Show
 
 data ParserState = ParserState { subject :: Text
-                               , position :: Int
+                               , position :: Position
                                }
+
+advance :: ParserState -> Text -> ParserState
+advance = T.foldl' go
+  where go :: ParserState -> Char -> ParserState
+        go st c = st{ subject = T.drop 1 (subject st)
+                    , position = case c of
+                                      '\n' -> Position { lineNumber =
+                                                  lineNumber (position st) + 1
+                                                  , columnNumber = 1 }
+                                      _    -> Position { lineNumber =
+                                                  lineNumber (position st)
+                                                  , columnNumber =
+                                                  columnNumber (position st) + 1
+                                                  } }
 
 newtype Parser a = Parser {
   evalParser :: ParserState -> Either ParseError (ParserState, a)
@@ -53,9 +71,9 @@ instance MonadPlus Parser where
          Right res  -> Right res
          Left _     -> evalParser p2 st
 
-runParser :: Parser a -> Text -> Either ParseError a
-runParser p t =
-  fmap snd $ evalParser p ParserState{ subject = t, position = 0 }
+parse :: Parser a -> Text -> Either ParseError a
+parse p t =
+  fmap snd $ evalParser p ParserState{ subject = t, position = Position 1 1 }
 
 failure :: ParserState -> String -> Either ParseError (ParserState, a)
 failure st msg = Left $ ParseError (position st) msg
@@ -66,10 +84,8 @@ success st x = Right (st, x)
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy f = Parser g
   where g st = case T.uncons (subject st) of
-                    Just (c, t') | f c ->
-                         success st{ subject = t'
-                                   , position = position st + 1 }
-                                 c
+                    Just (c, _) | f c ->
+                         success (advance st (T.singleton c)) c
                     _ -> failure st "satisfy"
 
 peekChar :: Parser (Maybe Char)
@@ -97,59 +113,53 @@ char c = satisfy (== c)
 anyChar :: Parser Char
 anyChar = satisfy (const True)
 
-getPosition :: Parser Int
+getPosition :: Parser Position
 getPosition = Parser $ \st -> success st (position st)
 
 takeWhile :: (Char -> Bool) -> Parser Text
 takeWhile f = Parser $ \st ->
-  let (t, rest) = T.span f (subject st) in
-  success st{ subject = rest, position = position st + T.length t } t
+  let t = T.takeWhile f (subject st) in
+  success (advance st t) t
 
 takeTill :: (Char -> Bool) -> Parser Text
 takeTill f = takeWhile (not . f)
 
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 f = Parser $ \st ->
-  case T.span f (subject st) of
-       (t, rest) | T.null t -> failure st "takeWhile1"
-                 | otherwise -> success st{ subject = rest
-                                          , position = position st +
-                                                T.length t }
-                                        t
+  case T.takeWhile f (subject st) of
+       t | T.null t  -> failure st "takeWhile1"
+         | otherwise -> success (advance st t) t
 
 takeText :: Parser Text
 takeText = Parser $ \st ->
   let t = subject st in
-  success st{ subject = mempty, position = position st + T.length t } t
+  success (advance st t) t
 
 skip :: (Char -> Bool) -> Parser ()
 skip f = Parser $ \st ->
   case T.uncons (subject st) of
-       Just (c,t') | f c -> success st{ subject = t'
-                                      , position = position st + 1 } ()
-       _                 -> failure st "skip"
+       Just (c,_) | f c -> success (advance st (T.singleton c)) ()
+       _                -> failure st "skip"
 
 skipWhile :: (Char -> Bool) -> Parser ()
 skipWhile f = Parser $ \st ->
-  let (t', rest) = T.span f (subject st) in
-  success st{ subject = rest, position = position st + T.length t' } ()
+  let t' = T.takeWhile f (subject st) in
+  success (advance st t') ()
 
 string :: Text -> Parser Text
 string s = Parser $ \st ->
-  case T.stripPrefix s (subject st) of
-       Just t' -> success st{ subject = t'
-                            , position = position st + T.length s } s
-       Nothing -> failure st "string"
+  if s `T.isPrefixOf` (subject st)
+     then success (advance st s) s
+     else failure st "string"
 
 scan :: s -> (s -> Char -> Maybe s) -> Parser Text
 scan s0 f = Parser $ go s0 []
   where go s cs st =
          case T.uncons (subject st) of
                Nothing        -> finish st cs
-               Just (c, rest) -> case f s c of
-                                  Just s' -> go s' (c:cs) st{
-                                                   subject = rest
-                                                 , position= position st + 1 }
+               Just (c, _)    -> case f s c of
+                                  Just s' -> go s' (c:cs)
+                                              (advance st (T.singleton c))
                                   Nothing -> finish st cs
         finish st cs =
             success st (T.pack (reverse cs))

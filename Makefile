@@ -1,5 +1,5 @@
 PROG ?= dist/build/markdown/markdown
-BENCHPROGS ?= pandoc Markdown.pl
+BENCHPROGS ?= pandoc
 SOURCES=Cheapskate.hs Cheapskate/Parse.hs Cheapskate/Types.hs Cheapskate/Render.hs bin/markdown.hs ParserCombinators.hs
 .PHONY: prof test bench linecount clean
 

@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Cheapskate.Parse (parseMarkdown, processLines {- TODO for now -}) where
+import SimpleParserCombinators
 import Data.Char hiding (Space)
 import qualified Data.Set as Set
 import Prelude hiding (takeWhile)
 import Data.Maybe (mapMaybe)
-import Data.Attoparsec.Text as Attoparsec
 import Data.List (intercalate, intersperse)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -228,7 +228,7 @@ addContainer ct = modify $ \(ContainerStack top rest) ->
 tryScanners :: [Container] -> ColumnNumber -> Text -> (Text, Int)
 tryScanners [] _ t = (t, 0)
 tryScanners (c:cs) colnum t =
-  case parseOnly (scanner >> takeText) t of
+  case runParser (scanner >> takeText) t of
        Right t'   -> tryScanners cs (colnum + T.length t - T.length t') t'
        Left _err  -> (t, length (c:cs))
   where scanner = case containerType c of
@@ -249,9 +249,9 @@ tryScanners (c:cs) colnum t =
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)
 containerize lastLineIsText t =
-  case parseOnly newContainers t of
+  case runParser newContainers t of
        Right (cs,t') -> (cs, t')
-       Left err      -> error err
+       Left err      -> error (show err)
   where newContainers = do
           regContainers <- many (containerStart lastLineIsText)
           verbatimContainers <- option []
@@ -416,7 +416,7 @@ scanSpaces = skipWhile (==' ')
 -- Scan 0 or more spaces, and optionally a newline
 -- and more spaces.
 scanSpnl :: Scanner
-scanSpnl = scanSpaces *> opt (endOfLine *> scanSpaces)
+scanSpnl = scanSpaces *> opt (char '\n' *> scanSpaces)
 
 -- Try a scanner; return success even if it doesn't match.
 opt :: Scanner -> Scanner
@@ -437,7 +437,7 @@ nfbChar c = nfb (skip (==c))
 
 upToCountChars :: Int -> (Char -> Bool) -> Parser Text
 upToCountChars cnt f =
-  Attoparsec.scan 0 (\n c -> if n < cnt && f c then Just (n+1) else Nothing)
+  scan 0 (\n c -> if n < cnt && f c then Just (n+1) else Nothing)
 
 -- Parse the sequence of `#` characters that begins an ATX
 -- header, and return the number of characters.  We require
@@ -518,7 +518,7 @@ parseBullet = do
 parseListNumber :: Parser ContainerType
 parseListNumber = do
     ind <- parseNonindentSpaces
-    num <- decimal  -- a string of decimal digits
+    num <- (read . T.unpack) <$> takeWhile1 isDigit
     wrap <-  PeriodFollowing <$ skip (== '.')
          <|> ParenFollowing <$ skip (== ')')
     scanSpace <|> scanBlankline
@@ -533,7 +533,7 @@ pHtmlTag = do
   tagname <- takeWhile1 (\c -> isAlphaNum c || c == '?' || c == '!')
   let tagname' = T.toLower tagname
   let attr = do ss <- takeWhile isSpace
-                x <- letter
+                x <- satisfy isLetter
                 xs <- takeWhile (\c -> isAlphaNum c || c == ':')
                 skip (=='=')
                 v <- pQuoted '"' <|> pQuoted '\'' <|> takeWhile1 isAlphaNum
@@ -655,7 +655,7 @@ pSatisfy p =
 -- using the reference map.
 parseInlines :: ReferenceMap -> Text -> Inlines
 parseInlines refmap t =
-  case parseOnly (msum <$> many (pInline refmap) <* endOfInput) t of
+  case runParser (msum <$> many (pInline refmap) <* endOfInput) t of
        Left e   -> error ("parseInlines: " ++ show e) -- should not happen
        Right r  -> r
 

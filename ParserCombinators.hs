@@ -5,7 +5,7 @@ import qualified Data.Text as T
 import Control.Monad
 import Control.Applicative
 
-data Position = Position { lineNumber :: Int, columnNumber :: Int }
+data Position = Position { line :: Int, column :: Int }
 
 instance Show Position where
   show (Position ln cn) = "line " ++ show ln ++ " column " ++ show cn
@@ -21,13 +21,13 @@ advance = T.foldl' go
   where go :: ParserState -> Char -> ParserState
         go st c = st{ subject = T.drop 1 (subject st)
                     , position = case c of
-                                      '\n' -> Position { lineNumber =
-                                                  lineNumber (position st) + 1
-                                                  , columnNumber = 1 }
-                                      _    -> Position { lineNumber =
-                                                  lineNumber (position st)
-                                                  , columnNumber =
-                                                  columnNumber (position st) + 1
+                                      '\n' -> Position { line =
+                                                  line (position st) + 1
+                                                  , column = 1 }
+                                      _    -> Position { line =
+                                                  line (position st)
+                                                  , column =
+                                                  column (position st) + 1
                                                   } }
 
 newtype Parser a = Parser {
@@ -163,6 +163,18 @@ scan s0 f = Parser $ go s0 []
                                   Nothing -> finish st cs
         finish st cs =
             success st (T.pack (reverse cs))
+
+lookAhead :: Parser a -> Parser a
+lookAhead p = Parser $ \st ->
+  case evalParser p st of
+       Right (_,x) -> success st x
+       Left _      -> failure st "lookAhead"
+
+notFollowedBy :: Parser a -> Parser ()
+notFollowedBy p = Parser $ \st ->
+  case evalParser p st of
+       Right (_,_) -> failure st "notFollowedBy"
+       Left _      -> success st ()
 
 -- combinators (definitions borrowed from attoparsec)
 

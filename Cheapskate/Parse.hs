@@ -228,7 +228,7 @@ addContainer ct = modify $ \(ContainerStack top rest) ->
 tryScanners :: [Container] -> ColumnNumber -> Text -> (Text, Int)
 tryScanners [] _ t = (t, 0)
 tryScanners (c:cs) colnum t =
-  case runParser (scanner >> takeText) t of
+  case parse (scanner >> takeText) t of
        Right t'   -> tryScanners cs (colnum + T.length t - T.length t') t'
        Left _err  -> (t, length (c:cs))
   where scanner = case containerType c of
@@ -249,7 +249,7 @@ tryScanners (c:cs) colnum t =
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)
 containerize lastLineIsText t =
-  case runParser newContainers t of
+  case parse newContainers t of
        Right (cs,t') -> (cs, t')
        Left err      -> error (show err)
   where newContainers = do
@@ -655,7 +655,7 @@ pSatisfy p =
 -- using the reference map.
 parseInlines :: ReferenceMap -> Text -> Inlines
 parseInlines refmap t =
-  case runParser (msum <$> many (pInline refmap) <* endOfInput) t of
+  case parse (msum <$> many (pInline refmap) <* endOfInput) t of
        Left e   -> error ("parseInlines: " ++ show e) -- should not happen
        Right r  -> r
 

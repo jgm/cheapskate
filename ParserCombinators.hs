@@ -51,7 +51,7 @@ instance MonadPlus Parser where
   mplus p1 p2 = Parser $ \st ->
     case evalParser p1 st of
          Right res  -> Right res
-         Left e     -> evalParser p2 st
+         Left _     -> evalParser p2 st
 
 runParser :: Parser a -> Text -> Either ParseError a
 runParser p t =
@@ -134,12 +134,12 @@ string s = Parser $ \st ->
        Nothing -> Left $ ParseError (position st) "string"
 
 scan :: s -> (s -> Char -> Maybe s) -> Parser Text
-scan s0 f = Parser $ go s0 f []
-  where go s f cs st =
+scan s0 f = Parser $ go s0 []
+  where go s cs st =
          case T.uncons (subject st) of
                Nothing        -> finish st cs
                Just (c, rest) -> case f s c of
-                                  Just s' -> go s' f (c:cs) st{
+                                  Just s' -> go s' (c:cs) st{
                                                    subject = rest
                                                  , position= position st + 1 }
                                   Nothing -> finish st cs
@@ -155,12 +155,12 @@ many1 :: Alternative f => f a -> f [a]
 many1 p = liftA2 (:) p (many p)
 
 manyTill :: Alternative f => f a -> f b -> f [a]
-manyTill p end = scan
-    where scan = (end *> pure []) <|> liftA2 (:) p scan
+manyTill p end = go
+  where go = (end *> pure []) <|> liftA2 (:) p go
 
 skipMany :: Alternative f => f a -> f ()
-skipMany p = scan
-    where scan = (p *> scan) <|> pure ()
+skipMany p = go
+  where go = (p *> go) <|> pure ()
 
 skipMany1 :: Alternative f => f a -> f ()
 skipMany1 p = p *> skipMany p

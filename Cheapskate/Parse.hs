@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Cheapskate.Parse (parseMarkdown, processLines {- TODO for now -}) where
-import SimpleParserCombinators
+import ParserCombinators
 import Data.Char hiding (Space)
 import qualified Data.Set as Set
 import Prelude hiding (takeWhile)

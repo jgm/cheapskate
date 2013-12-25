@@ -1,4 +1,4 @@
-module SimpleParserCombinators where
+module ParserCombinators where
 import Prelude hiding (takeWhile)
 import Data.Text (Text)
 import qualified Data.Text as T

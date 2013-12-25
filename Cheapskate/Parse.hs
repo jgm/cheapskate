@@ -425,11 +425,7 @@ opt s = option () (s >> return ())
 -- Not followed by: Succeed without consuming input if the specified
 -- scanner would not succeed.
 nfb :: Parser a -> Scanner
-nfb s = do
-  succeeded <- option False (True <$ s)
-  if succeeded
-     then mzero
-     else return ()
+nfb = notFollowedBy
 
 -- Succeed if not followed by a character. Consumes no input.
 nfbChar :: Char -> Scanner

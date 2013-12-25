@@ -1,4 +1,32 @@
-module ParserCombinators where
+module ParserCombinators (
+    Position(..)
+  , Parser
+  , parse
+  , satisfy
+  , peekChar
+  , inClass
+  , notInClass
+  , endOfInput
+  , char
+  , anyChar
+  , getPosition
+  , takeWhile
+  , takeTill
+  , takeWhile1
+  , takeText
+  , skip
+  , skipWhile
+  , string
+  , scan
+  , lookAhead
+  , notFollowedBy
+  , option
+  , many1
+  , manyTill
+  , skipMany
+  , skipMany1
+  , count
+  ) where
 import Prelude hiding (takeWhile)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -197,5 +225,3 @@ skipMany1 p = p *> skipMany p
 
 count :: Monad m => Int -> m a -> m [a]
 count n p = sequence (replicate n p)
-
-

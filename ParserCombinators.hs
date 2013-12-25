@@ -57,19 +57,26 @@ runParser :: Parser a -> Text -> Either ParseError a
 runParser p t =
   fmap snd $ evalParser p ParserState{ subject = t, position = 0 }
 
+failure :: ParserState -> String -> Either ParseError (ParserState, a)
+failure st msg = Left $ ParseError (position st) msg
+
+success :: ParserState -> a -> Either ParseError (ParserState, a)
+success st x = Right (st, x)
+
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy f = Parser g
   where g st = case T.uncons (subject st) of
                     Just (c, t') | f c ->
-                         Right (st{ subject = t', position = position st + 1 },
-                                c)
-                    _ -> Left $ ParseError (position st) "satisfy"
+                         success st{ subject = t'
+                                   , position = position st + 1 }
+                                 c
+                    _ -> failure st "satisfy"
 
 peekChar :: Parser (Maybe Char)
 peekChar = Parser $ \st ->
              case T.uncons (subject st) of
-                  Just (c, _) -> Right (st, Just c)
-                  Nothing     -> Right (st, Nothing)
+                  Just (c, _) -> success st (Just c)
+                  Nothing     -> success st Nothing
 
 -- not efficient as in attoparsec
 inClass :: String -> Char -> Bool
@@ -81,8 +88,8 @@ notInClass s = not . inClass s
 endOfInput :: Parser ()
 endOfInput = Parser $ \st ->
   if T.null (subject st)
-     then Right (st, ())
-     else Left $ ParseError (position st) "endOfInput"
+     then success st ()
+     else failure st "endOfInput"
 
 char :: Char -> Parser Char
 char c = satisfy (== c)
@@ -91,12 +98,12 @@ anyChar :: Parser Char
 anyChar = satisfy (const True)
 
 getPosition :: Parser Int
-getPosition = Parser $ \st -> Right (st, position st)
+getPosition = Parser $ \st -> success st (position st)
 
 takeWhile :: (Char -> Bool) -> Parser Text
 takeWhile f = Parser $ \st ->
   let (t, rest) = T.span f (subject st) in
-  Right (st{ subject = rest, position = position st + T.length t }, t)
+  success st{ subject = rest, position = position st + T.length t } t
 
 takeTill :: (Char -> Bool) -> Parser Text
 takeTill f = takeWhile (not . f)
@@ -104,34 +111,35 @@ takeTill f = takeWhile (not . f)
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 f = Parser $ \st ->
   case T.span f (subject st) of
-       (t, rest) | T.null t -> Left $ ParseError (position st) "takeWhile1"
-                 | otherwise -> Right
-                                (st { subject = rest
-                                    , position = position st + T.length t }, t)
+       (t, rest) | T.null t -> failure st "takeWhile1"
+                 | otherwise -> success st{ subject = rest
+                                          , position = position st +
+                                                T.length t }
+                                        t
 
 takeText :: Parser Text
 takeText = Parser $ \st ->
   let t = subject st in
-  Right (st{ subject = mempty, position = position st + T.length t }, t)
+  success st{ subject = mempty, position = position st + T.length t } t
 
 skip :: (Char -> Bool) -> Parser ()
 skip f = Parser $ \st ->
   case T.uncons (subject st) of
-       Just (c,t') | f c -> Right (st{ subject = t'
-                                     , position = position st + 1 }, ())
-       _                 -> Left $ ParseError (position st) "skip"
+       Just (c,t') | f c -> success st{ subject = t'
+                                      , position = position st + 1 } ()
+       _                 -> failure st "skip"
 
 skipWhile :: (Char -> Bool) -> Parser ()
 skipWhile f = Parser $ \st ->
   let (t', rest) = T.span f (subject st) in
-  Right (st{ subject = rest, position = position st + T.length t' }, ())
+  success st{ subject = rest, position = position st + T.length t' } ()
 
 string :: Text -> Parser Text
 string s = Parser $ \st ->
   case T.stripPrefix s (subject st) of
-       Just t' -> Right (st{ subject = t'
-                           , position = position st + T.length s }, s)
-       Nothing -> Left $ ParseError (position st) "string"
+       Just t' -> success st{ subject = t'
+                            , position = position st + T.length s } s
+       Nothing -> failure st "string"
 
 scan :: s -> (s -> Char -> Maybe s) -> Parser Text
 scan s0 f = Parser $ go s0 []
@@ -144,7 +152,7 @@ scan s0 f = Parser $ go s0 []
                                                  , position= position st + 1 }
                                   Nothing -> finish st cs
         finish st cs =
-            Right (st, T.pack (reverse cs))
+            success st (T.pack (reverse cs))
 
 -- combinators (definitions borrowed from attoparsec)
 

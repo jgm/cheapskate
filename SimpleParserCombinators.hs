@@ -133,18 +133,17 @@ string s = Parser $ \st ->
        Nothing -> Left $ ParseError (position st) "string"
 
 scan :: s -> (s -> Char -> Maybe s) -> Parser Text
-scan s0 f = Parser $ go 0 s0 f
-  where go charsParsed s f st =
+scan s0 f = Parser $ go s0 f []
+  where go s f cs st =
          case T.uncons (subject st) of
-               Nothing        -> finish charsParsed st
+               Nothing        -> finish st cs
                Just (c, rest) -> case f s c of
-                                  Just s' -> go (charsParsed + 1) s' f st
-                                  Nothing -> finish charsParsed st
-        finish charsParsed st =
-            let (t', rest) = T.splitAt charsParsed (subject st) in
-            Right (st{ subject = T.drop charsParsed (subject st)
-                     , position = position st + charsParsed },
-                   T.take charsParsed (subject st))
+                                  Just s' -> go s' f (c:cs) st{
+                                                   subject = rest
+                                                 , position= position st + 1 }
+                                  Nothing -> finish st cs
+        finish st cs =
+            Right (st, T.pack (reverse cs))
 
 -- combinators (definitions borrowed from attoparsec)
 

@@ -280,12 +280,12 @@ verbatimContainerStart lastLineIsText = nfb scanBlankline *>
 
 leaf :: Bool -> Parser Leaf
 leaf lastLineIsText = scanNonindentSpace *> (
-      (ATXHeader <$> parseAtxHeaderStart <*>
+     (ATXHeader <$> parseAtxHeaderStart <*>
          (T.strip . removeATXSuffix <$> takeText))
-  <|> (guard lastLineIsText *> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty))
-  <|> (Rule <$ scanHRuleLine)
-  <|> (guard (not lastLineIsText) *> pReference)
-  <|> textLineOrBlank
+   <|> (guard lastLineIsText *> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty))
+   <|> (Rule <$ scanHRuleLine)
+   <|> (guard (not lastLineIsText) *> pReference)
+   <|> textLineOrBlank
   )
   where removeATXSuffix t = case T.dropWhileEnd (`elem` " #") t of
                                  t' | T.null t' -> t'

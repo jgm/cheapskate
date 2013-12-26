@@ -55,7 +55,9 @@ data Container = Container{
 
 data ContainerType = Document
                    | BlockQuote
-                   | ListItem { listIndent :: Int, listType :: ListType }
+                   | ListItem { markerColumn :: Int
+                              , padding      :: Int
+                              , listType     :: ListType }
                    | FencedCode { fence :: Text, info :: Text }
                    | IndentedCode
                    | RawHtmlBlock { openingHtml :: Text }
@@ -72,13 +74,6 @@ showElt :: Elt -> String
 showElt (C c) = show c
 showElt (L _ (TextLine s)) = show s
 showElt (L _ lf) = show lf
-
-listMarkerWidth :: ListType -> Int
-listMarkerWidth (Bullet _) = 1
-listMarkerWidth (Numbered _ n) | n < 10    = 1
-                               | n < 100   = 2
-                               | n < 1000  = 3
-                               | otherwise = 4
 
 data Leaf = TextLine Text
           | BlankLine Text
@@ -120,11 +115,12 @@ processElts refmap (C (Container ct cs) : rest) =
     Document -> error "Document container found inside Document"
     BlockQuote -> singleton (Blockquote $ processElts refmap (toList cs)) <>
                   processElts refmap rest
-    ListItem _ listType' ->
+    ListItem { listType = listType' } ->
         singleton (List isTight listType' items') <> processElts refmap rest'
               where xs = takeListItems rest
                     rest' = drop (length xs) rest
-                    takeListItems (C c@(Container (ListItem _ lt') _) : zs)
+                    takeListItems (C c@(Container ListItem { listType = lt' } _)
+                       : zs)
                       | listTypesMatch lt' listType' = c : takeListItems zs
                       | otherwise = []
                     takeListItems _ = []
@@ -235,16 +231,12 @@ tryScanners (c:cs) colnum t =
                        BlockQuote     -> scanBlockquoteStart
                        IndentedCode   -> scanIndentSpace
                        RawHtmlBlock{} -> nfb scanBlankline
-                       ListItem{ listIndent = n, listType = lt }
-                                      -> scanBlankline
-                                      -- we require indent past marker,
-                                      -- but allow an extra space so indented
-                                      -- code begins where it should:
-                                      -- 1. foobar
-                                      --
-                                      --        code
-                                      <|> () <$
-                                           (string (T.replicate (n + 1) " "))
+                       li@ListItem{}  -> scanBlankline
+                                         <|>
+                                         (do scanSpacesTilColumn
+                                                (markerColumn li + 1)
+                                             upToCountChars (padding li) (==' ')
+                                             return ())
                        _              -> return ()
 
 containerize :: Bool -> Text -> ([ContainerType], Leaf)
@@ -394,8 +386,12 @@ scanIndentSpace = () <$ count 4 (skip (==' '))
 scanNonindentSpace :: Scanner
 scanNonindentSpace = () <$ upToCountChars 3 (==' ')
 
-parseNonindentSpaces :: Parser Int
-parseNonindentSpaces = T.length <$> upToCountChars 3 (==' ')
+scanSpacesTilColumn :: Int -> Scanner
+scanSpacesTilColumn col = do
+  currentCol <- column <$> getPosition
+  if currentCol >= col
+     then return ()
+     else skip (==' ') *> scanSpacesTilColumn col
 
 -- Scan a specified character.
 scanChar :: Char -> Scanner
@@ -497,28 +493,39 @@ parseHtmlBlockStart = do
 
 -- Parse a list marker and return the list type.
 parseListMarker :: Parser ContainerType
-parseListMarker = parseBullet <|> parseListNumber
+parseListMarker = do
+  scanNonindentSpace
+  col <- column <$> getPosition
+  ty <- parseBullet <|> parseListNumber
+  padding' <- lookAhead $ do
+    numspaces <- T.length <$> upToCountChars 3 (== ' ')
+    nextChar <- peekChar
+    case nextChar of
+         Nothing  -> return 1
+         Just ' ' -> return 1
+         _        -> return numspaces
+  return $ ListItem { listType = ty
+                    , markerColumn = col
+                    , padding = padding' }
 
 -- Parse a bullet and return list type.
-parseBullet :: Parser ContainerType
+parseBullet :: Parser ListType
 parseBullet = do
-  ind <- parseNonindentSpaces
   c <- satisfy $ inClass "+*-"
   scanSpace <|> scanBlankline -- allow empty list item
   unless (c == '+')
     $ nfb $ (count 2 $ scanSpaces >> skip (== c)) >>
           skipWhile (\x -> x == ' ' || x == c) >> endOfInput -- hrule
-  return $ ListItem { listType = Bullet c, listIndent = ind }
+  return $ Bullet c
 
 -- Parse a list number marker and return list type.
-parseListNumber :: Parser ContainerType
+parseListNumber :: Parser ListType
 parseListNumber = do
-    ind <- parseNonindentSpaces
     num <- (read . T.unpack) <$> takeWhile1 isDigit
     wrap <-  PeriodFollowing <$ skip (== '.')
          <|> ParenFollowing <$ skip (== ')')
     scanSpace <|> scanBlankline
-    return $ ListItem { listType = Numbered wrap num, listIndent = ind }
+    return $ Numbered wrap num
 
 -- Returns tag type and whole tag.
 pHtmlTag :: Parser (HtmlTagType, Text)

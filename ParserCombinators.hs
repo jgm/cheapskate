@@ -10,6 +10,7 @@ module ParserCombinators (
   , char
   , anyChar
   , getPosition
+  , setPosition
   , takeWhile
   , takeTill
   , takeWhile1
@@ -143,6 +144,13 @@ anyChar = satisfy (const True)
 
 getPosition :: Parser Position
 getPosition = Parser $ \st -> success st (position st)
+
+-- note: this does not actually change the position in the subject;
+-- it only changes what column counts as column N.  It is intended
+-- to be used in cases where we're parsing a partial line but need to
+-- have accurate column information.
+setPosition :: Position -> Parser ()
+setPosition pos = Parser $ \st -> success st{ position = pos } ()
 
 takeWhile :: (Char -> Bool) -> Parser Text
 takeWhile f = Parser $ \st ->

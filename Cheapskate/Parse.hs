@@ -241,13 +241,13 @@ tryScanners cs t = case parse (scanners $ map scanner cs) t of
                                              return ())
                        _              -> return ()
 
-containerize :: Bool -> Int {- offset -} -> Text -> ([ContainerType], Leaf)
+containerize :: Bool -> Int -> Text -> ([ContainerType], Leaf)
 containerize lastLineIsText offset t =
-  -- this is a kludge to ensure that getPosition returns the correct column
-  case parse (count offset (skip $ const True) >> newContainers) t of
+  case parse newContainers t of
        Right (cs,t') -> (cs, t')
        Left err      -> error (show err)
   where newContainers = do
+          getPosition >>= \pos -> setPosition pos{ column = offset + 1 }
           regContainers <- many (containerStart lastLineIsText)
           verbatimContainers <- option []
                             $ count 1 (verbatimContainerStart lastLineIsText)
@@ -306,7 +306,7 @@ processLine (lineNumber, txt) = do
          then closeContainer
          else addLeaf lineNumber (TextLine t')
          -- this is a kludge to get position information right:
-    _ -> case containerize lastLineIsText (T.length txt - T.length t') txt of
+    _ -> case containerize lastLineIsText (T.length txt - T.length t') t' of
        ([], TextLine t) ->
          case viewr cs of
             -- lazy continuation?

@@ -38,8 +38,8 @@
 - tight
 
 
-- tight
+- loose
   - with loose
 
   - sublist
-- tight
+- loose

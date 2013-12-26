@@ -221,13 +221,15 @@ addContainer :: ContainerType -> ContainerM ()
 addContainer ct = modify $ \(ContainerStack top rest) ->
   ContainerStack (Container ct mempty) (top:rest)
 
-tryScanners :: [Container] -> ColumnNumber -> Text -> (Text, Int)
-tryScanners [] _ t = (t, 0)
-tryScanners (c:cs) colnum t =
-  case parse (scanner >> takeText) t of
-       Right t'   -> tryScanners cs (colnum + T.length t - T.length t') t'
-       Left _err  -> (t, length (c:cs))
-  where scanner = case containerType c of
+tryScanners :: [Container] -> Text -> (Text, Int)
+tryScanners cs t = case parse (scanners $ map scanner cs) t of
+                        Right (t', n)  -> (t', n)
+                        Left e         -> error $ "error parsing scanners: " ++
+                                           show e
+  where scanners [] = (,) <$> takeText <*> pure 0
+        scanners (p:ps) = (p *> scanners ps)
+                      <|> ((,) <$> takeText <*> pure (length (p:ps)))
+        scanner c = case containerType c of
                        BlockQuote     -> scanBlockquoteStart
                        IndentedCode   -> scanIndentSpace
                        RawHtmlBlock{} -> nfb scanBlankline
@@ -239,9 +241,10 @@ tryScanners (c:cs) colnum t =
                                              return ())
                        _              -> return ()
 
-containerize :: Bool -> Text -> ([ContainerType], Leaf)
-containerize lastLineIsText t =
-  case parse newContainers t of
+containerize :: Bool -> Int {- offset -} -> Text -> ([ContainerType], Leaf)
+containerize lastLineIsText offset t =
+  -- this is a kludge to ensure that getPosition returns the correct column
+  case parse (count offset (skip $ const True) >> newContainers) t of
        Right (cs,t') -> (cs, t')
        Left err      -> error (show err)
   where newContainers = do
@@ -289,7 +292,7 @@ leaf lastLineIsText = scanNonindentSpace *> (
 processLine :: (LineNumber, Text) -> ContainerM ()
 processLine (lineNumber, txt) = do
   ContainerStack top@(Container ct cs) rest <- get
-  let (t', numUnmatched) = tryScanners (reverse $ top:rest) 0 txt
+  let (t', numUnmatched) = tryScanners (reverse $ top:rest) txt
   let lastLineIsText = numUnmatched == 0 &&
                        case viewr cs of
                             (_ :> L _ (TextLine _)) -> True
@@ -302,7 +305,8 @@ processLine (lineNumber, txt) = do
          -- closing code fence
          then closeContainer
          else addLeaf lineNumber (TextLine t')
-    _ -> case containerize lastLineIsText t' of
+         -- this is a kludge to get position information right:
+    _ -> case containerize lastLineIsText (T.length txt - T.length t') txt of
        ([], TextLine t) ->
          case viewr cs of
             -- lazy continuation?
@@ -504,6 +508,7 @@ parseListMarker = do
          Nothing  -> return 1
          Just ' ' -> return 1
          _        -> return numspaces
+  guard $ padding' > 0
   return $ ListItem { listType = ty
                     , markerColumn = col
                     , padding = padding' }
@@ -512,7 +517,6 @@ parseListMarker = do
 parseBullet :: Parser ListType
 parseBullet = do
   c <- satisfy $ inClass "+*-"
-  scanSpace <|> scanBlankline -- allow empty list item
   unless (c == '+')
     $ nfb $ (count 2 $ scanSpaces >> skip (== c)) >>
           skipWhile (\x -> x == ' ' || x == c) >> endOfInput -- hrule
@@ -524,7 +528,6 @@ parseListNumber = do
     num <- (read . T.unpack) <$> takeWhile1 isDigit
     wrap <-  PeriodFollowing <$ skip (== '.')
          <|> ParenFollowing <$ skip (== ')')
-    scanSpace <|> scanBlankline
     return $ Numbered wrap num
 
 -- Returns tag type and whole tag.

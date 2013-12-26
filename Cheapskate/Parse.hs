@@ -201,8 +201,16 @@ closeContainer :: ContainerM ()
 closeContainer = do
   ContainerStack top rest <- get
   case rest of
-       (Container ct' cs' : rs) -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
-       [] -> fail "Cannot close last container on stack"
+       (Container ct' cs' : rs) ->
+         case top of
+              (Container li@ListItem{} cs'') ->
+                case viewr cs'' of
+                     (zs :> b@(L _ BlankLine{})) ->
+                       put $ ContainerStack (Container ct' (cs' |>
+                              C (Container li zs) |> b)) rs
+                     _ -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
+              _ -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
+       [] -> put $ ContainerStack top rest
 
 addLeaf :: LineNumber -> Leaf -> ContainerM ()
 addLeaf lineNum lf = do

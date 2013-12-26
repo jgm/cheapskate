@@ -41,7 +41,6 @@ lookupLinkReference :: ReferenceMap
                     -> Maybe (Text, Text)  -- (url, title)
 lookupLinkReference refmap key = M.lookup (normalizeReference key) refmap
 
-type ColumnNumber = Int
 type LineNumber   = Int
 
 data Elt = C Container
@@ -305,7 +304,6 @@ processLine (lineNumber, txt) = do
          -- closing code fence
          then closeContainer
          else addLeaf lineNumber (TextLine t')
-         -- this is a kludge to get position information right:
     _ -> case containerize lastLineIsText (T.length txt - T.length t') t' of
        ([], TextLine t) ->
          case viewr cs of
@@ -501,13 +499,16 @@ parseListMarker = do
   scanNonindentSpace
   col <- column <$> getPosition
   ty <- parseBullet <|> parseListNumber
-  padding' <- lookAhead $ do
-    numspaces <- T.length <$> upToCountChars 3 (== ' ')
+  numspaces <- T.length <$> lookAhead (upToCountChars 4 (== ' '))
+  padding' <- do
     nextChar <- peekChar
     case nextChar of
          Nothing  -> return 1
          Just ' ' -> return 1
          _        -> return numspaces
+  if numspaces > 0
+     then skip (==' ') -- skip space after marker
+     else return ()    -- blankline
   guard $ padding' > 0
   return $ ListItem { listType = ty
                     , markerColumn = col

@@ -2,7 +2,6 @@
 \\*emphasis*
 \**not bold**
 \<br/> not a tag
-\<http://google.com> not an autolink
 \[link](/foo) not a link
 [link](/foo\) "title\"")
 \`not code`

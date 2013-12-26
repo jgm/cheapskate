@@ -120,28 +120,21 @@ processElts refmap (C (Container ct cs) : rest) =
                     rest' = drop (length xs) rest
                     takeListItems (C c@(Container ListItem { listType = lt' } _)
                        : zs)
-                      | listTypesMatch lt' listType' = c : takeListItems zs
-                      | otherwise = []
+                      | listTypesMatch lt' listType' = C c : takeListItems zs
+                    takeListItems (lf@(L _ (BlankLine _)) :
+                             c@(C (Container ListItem { listType = lt' } _)) :
+                             zs)
+                      | listTypesMatch lt' listType' = lf : c : takeListItems zs
                     takeListItems _ = []
                     listTypesMatch (Bullet c1) (Bullet c2) = c1 == c2
                     listTypesMatch (Numbered w1 _) (Numbered w2 _) = w1 == w2
                     listTypesMatch _ _ = False
-                    items = mapMaybe getItem (Container ct cs : xs)
+                    items = mapMaybe getItem (Container ct cs : [c | C c <- xs])
                     getItem (Container ListItem{} cs') = Just $ toList cs'
                     getItem _                         = Nothing
                     items' = map (processElts refmap) items
-                    itemsMinusTrailingBlanks =
-                          reverse $ case reverse items of
-                                         (w:ws) -> stripTrailingBlanks w : ws
-                                         []     -> []
-                    isTight = not $ any itemWithBlankLine
-                              itemsMinusTrailingBlanks
-                    -- this first case is an empty tight list item:
-                    -- - x
-                    -- -
-                    -- - y
-                    itemWithBlankLine [L _ (BlankLine _)] = False
-                    itemWithBlankLine its = any isBlankLine its
+                    isTight = not (any isBlankLine xs) &&
+                              all tightListItem items
     FencedCode _ info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
                   where txt = joinLines $ map extractText $ toList cs
@@ -172,7 +165,9 @@ processElts refmap (C (Container ct cs) : rest) =
 
    where isBlankLine (L _ BlankLine{}) = True
          isBlankLine _ = False
-         stripTrailingBlanks = reverse . dropWhile isBlankLine . reverse
+         tightListItem [L _ (BlankLine _)] = True
+         tightListItem [] = True
+         tightListItem xs = not $ any isBlankLine xs
 
   -- recursively generate blocks
   -- this requrse grouping text lines into paragraphs,

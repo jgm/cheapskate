@@ -165,7 +165,6 @@ processElts refmap (C (Container ct cs) : rest) =
 
    where isBlankLine (L _ BlankLine{}) = True
          isBlankLine _ = False
-         tightListItem [L _ (BlankLine _)] = True
          tightListItem [] = True
          tightListItem xs = not $ any isBlankLine xs
 
@@ -201,8 +200,11 @@ closeContainer = do
               (Container li@ListItem{} cs'') ->
                 case viewr cs'' of
                      (zs :> b@(L _ BlankLine{})) ->
-                       put $ ContainerStack (Container ct' (cs' |>
-                              C (Container li zs) |> b)) rs
+                       put $ ContainerStack
+                            (if Seq.null zs
+                                then Container ct' (cs' |> C (Container li zs))
+                                else Container ct' (cs' |>
+                                        C (Container li zs) |> b)) rs
                      _ -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
               _ -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
        [] -> put $ ContainerStack top rest

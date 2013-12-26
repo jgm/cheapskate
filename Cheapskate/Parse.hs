@@ -705,7 +705,8 @@ pStr = do
            $ (x:xs)
   case viewr sq of
        (rest :> Str ys)
-         | T.all (inClass "a-zA-Z0-9-") ys && ys `Set.member` schemeSet ->
+         | T.all (\c -> isAscii c && isAlphaNum c) ys &&
+           ys `Set.member` schemeSet ->
              ((rest `mappend`) <$> pUri ys) <|> return sq
        _ -> return sq
  where isWordChar :: Char -> Bool
@@ -792,7 +793,8 @@ pUri scheme = do
 data OpenParens = OpenParens Int
 
 uriScanner :: OpenParens -> Char -> Maybe OpenParens
-uriScanner _ ' ' = Nothing
+uriScanner _ ' '  = Nothing
+uriScanner _ '\n' = Nothing
 uriScanner (OpenParens n) '(' = Just (OpenParens (n + 1))
 uriScanner (OpenParens n) ')'
   | n > 0 = Just (OpenParens (n - 1))

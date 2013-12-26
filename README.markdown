@@ -139,7 +139,8 @@ syntax document:
 ### Tight vs. loose lists
 
 A list is considered "tight" if (a) it has only one item or
-(b) there is no blank space between any two consecutive items.
+there is no blank space between any two consecutive items, and
+(b) no item has blank lines as its immediate children.
 If a list is "tight," then list items consisting of a single
 paragraph or a paragraph followed by a sublist will be rendered
 without `<p>` tags.

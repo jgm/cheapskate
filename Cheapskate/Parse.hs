@@ -57,7 +57,9 @@ data ContainerType = Document
                    | ListItem { markerColumn :: Int
                               , padding      :: Int
                               , listType     :: ListType }
-                   | FencedCode { fence :: Text, info :: Text }
+                   | FencedCode { startColumn :: Int
+                                , fence :: Text
+                                , info :: Text }
                    | IndentedCode
                    | RawHtmlBlock
                    | Reference { referenceLabel :: Text
@@ -136,7 +138,7 @@ processElts refmap (C (Container ct cs) : rest) =
                     items' = map (processElts refmap) items
                     isTight = not (any isBlankLine xs) &&
                               all tightListItem items
-    FencedCode _ info' -> singleton (CodeBlock attr txt) <>
+    FencedCode _ _ info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
                   where txt = joinLines $ map extractText $ toList cs
                         attr = case T.words info' of
@@ -258,6 +260,8 @@ tryScanners cs t = case parse (scanners $ map scanner cs) t of
         scanner c = case containerType c of
                        BlockQuote     -> scanBlockquoteStart
                        IndentedCode   -> scanIndentSpace
+                       FencedCode{startColumn = col} ->
+                                         scanSpacesToColumn col
                        RawHtmlBlock   -> nfb scanBlankline
                        li@ListItem{}  -> scanBlankline
                                          <|>
@@ -329,7 +333,8 @@ processLine (lineNumber, txt) = do
   case ct of
     RawHtmlBlock{} | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     IndentedCode   | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
-    FencedCode{ fence = fence' } ->  -- here we don't check numUnmatched because we allow laziness
+    FencedCode{ fence = fence' } ->
+    -- here we don't check numUnmatched because we allow laziness
       if fence' `T.isPrefixOf` t'
          -- closing code fence
          then closeContainer
@@ -408,6 +413,13 @@ scanBlockquoteStart =
 -- Scan four spaces.
 scanIndentSpace :: Scanner
 scanIndentSpace = () <$ count 4 (skip (==' '))
+
+scanSpacesToColumn :: Int -> Scanner
+scanSpacesToColumn col = do
+  currentCol <- column <$> getPosition
+  case col - currentCol of
+       n | n >= 1 -> () <$ (count n (skip (==' ')))
+         | otherwise -> return ()
 
 -- Scan 0-3 spaces.
 scanNonindentSpace :: Scanner
@@ -495,23 +507,29 @@ scanHRuleLine = do
 -- the fence part and the rest (after any spaces).
 parseCodeFence :: Parser ContainerType
 parseCodeFence = do
+  scanNonindentSpace
+  col <- column <$> getPosition
   c <- satisfy $ inClass "`~"
   count 2 (char c)
   extra <- takeWhile (== c)
   scanSpaces
   rawattr <- takeWhile (/='`')
   endOfInput
-  return $ FencedCode { fence = T.pack [c,c,c] <> extra, info = rawattr }
+  return $ FencedCode { startColumn = col
+                      , fence = T.pack [c,c,c] <> extra
+                      , info = rawattr }
 
 -- Parse the start of an HTML block:  either an HTML tag or an
 -- HTML comment, with no indentation.
 parseHtmlBlockStart :: Parser ()
 parseHtmlBlockStart = () <$ lookAhead
-  (   (do t <- pHtmlTag
+  ( scanNonindentSpace *>
+     ((do t <- pHtmlTag
           guard $ f $ fst t
           return $ snd t)
     <|> string "<!--"
     <|> string "-->"
+     )
   )
  where f (Opening name) = name `Set.member` blockHtmlTags
        f (SelfClosing name) = name `Set.member` blockHtmlTags

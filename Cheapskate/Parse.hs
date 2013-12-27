@@ -59,7 +59,7 @@ data ContainerType = Document
                               , listType     :: ListType }
                    | FencedCode { fence :: Text, info :: Text }
                    | IndentedCode
-                   | RawHtmlBlock { openingHtml :: Text }
+                   | RawHtmlBlock
                    | Reference { referenceLabel :: Text
                                , referenceURL   :: Text
                                , referenceTitle :: Text }
@@ -159,10 +159,8 @@ processElts refmap (C (Container ct cs) : rest) =
                                                               = True
                         isIndentedCodeOrBlank _               = False
 
-    RawHtmlBlock{ openingHtml = openingHtml' } ->
-                        singleton (HtmlBlock txt) <> processElts refmap rest
-                  where txt = openingHtml' <>
-                               joinLines (map extractText (toList cs))
+    RawHtmlBlock -> singleton (HtmlBlock txt) <> processElts refmap rest
+                  where txt = joinLines (map extractText (toList cs))
     Reference{} -> processElts refmap rest
 
    where isBlankLine (L _ BlankLine{}) = True
@@ -206,7 +204,7 @@ closeContainer = do
                     (Container ct' cs' : rs) ->
                       put $ ContainerStack (Container ct' (cs' |> C top)) rs
                     [] -> return ()
-              Left e -> -- pass over in silence if ref doesn't parse?
+              Left _ -> -- pass over in silence if ref doesn't parse?
                         case rest of
                              (c:cs) -> put $ ContainerStack c cs
                              []     -> return ()
@@ -255,7 +253,7 @@ tryScanners cs t = case parse (scanners $ map scanner cs) t of
         scanner c = case containerType c of
                        BlockQuote     -> scanBlockquoteStart
                        IndentedCode   -> scanIndentSpace
-                       RawHtmlBlock{} -> nfb scanBlankline
+                       RawHtmlBlock   -> nfb scanBlankline
                        li@ListItem{}  -> scanBlankline
                                          <|>
                                          (do scanSpacesTilColumn
@@ -295,7 +293,7 @@ verbatimContainerStart :: Bool -> Parser ContainerType
 verbatimContainerStart lastLineIsText = nfb scanBlankline *>
    (  parseCodeFence
   <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
-  <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$> parseHtmlBlockStart))
+  <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$ parseHtmlBlockStart))
   <|> (guard (not lastLineIsText) *> (Reference mempty mempty mempty <$ scanReference))
    )
 
@@ -501,15 +499,14 @@ parseCodeFence = do
 
 -- Parse the start of an HTML block:  either an HTML tag or an
 -- HTML comment, with no indentation.
-parseHtmlBlockStart :: Parser Text
-parseHtmlBlockStart = do
-  initial <- (   (do t <- pHtmlTag
-                     guard $ f $ fst t
-                     return $ snd t)
-               <|> string "<!--"
-               <|> string "-->" )
-  rest <- takeText
-  return (initial <> rest)
+parseHtmlBlockStart :: Parser ()
+parseHtmlBlockStart = () <$ lookAhead
+  (   (do t <- pHtmlTag
+          guard $ f $ fst t
+          return $ snd t)
+    <|> string "<!--"
+    <|> string "-->"
+  )
  where f (Opening name) = name `Set.member` blockHtmlTags
        f (SelfClosing name) = name `Set.member` blockHtmlTags
        f (Closing name) = name `Set.member` blockHtmlTags

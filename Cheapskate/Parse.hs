@@ -517,7 +517,15 @@ parseListMarker = do
   guard $ padding' > 0
   return $ ListItem { listType = ty
                     , markerColumn = col
-                    , padding = padding' }
+                    , padding = padding' + listMarkerWidth ty
+                    }
+
+listMarkerWidth :: ListType -> Int
+listMarkerWidth (Bullet _) = 1
+listMarkerWidth (Numbered _ n) | n < 10    = 1
+                               | n < 100   = 2
+                               | n < 1000  = 3
+                               | otherwise = 4
 
 -- Parse a bullet and return list type.
 parseBullet :: Parser ListType

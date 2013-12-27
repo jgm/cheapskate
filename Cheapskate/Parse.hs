@@ -148,7 +148,12 @@ processElts refmap (C (Container ct cs) : rest) =
                               $ concatMap extractCode cbs
                         stripTrailingEmpties = reverse .
                           dropWhile (T.all (==' ')) . reverse
-                        extractCode (L _ (BlankLine t)) = [t]
+                        -- explanation for next line:  when we parsed
+                        -- the blank line, we dropped nonindent spaces.
+                        -- but for this, code block context, we want
+                        -- to have dropped indent spaces. we simply drop
+                        -- one more:
+                        extractCode (L _ (BlankLine t)) = [T.drop 1 t]
                         extractCode (C (Container IndentedCode cs')) =
                           map extractText $ toList cs'
                         extractCode _ = []

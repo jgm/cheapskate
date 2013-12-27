@@ -18,9 +18,6 @@
 
        CodeA
 
-
-
-
        CodeB
 
 2. Two

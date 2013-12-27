@@ -258,7 +258,8 @@ tryScanners cs t = case parse (scanners $ map scanner cs) t of
                                          <|>
                                          (do scanSpacesTilColumn
                                                 (markerColumn li + 1)
-                                             upToCountChars (padding li) (==' ')
+                                             upToCountChars (padding li - 1)
+                                                (==' ')
                                              return ())
                        Reference{}    -> nfb scanBlankline >>
                                          nfb scanReference

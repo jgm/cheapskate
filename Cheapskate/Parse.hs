@@ -518,16 +518,9 @@ parseListMarker = do
   scanNonindentSpace
   col <- column <$> getPosition
   ty <- parseBullet <|> parseListNumber
-  numspaces <- T.length <$> lookAhead (upToCountChars 4 (== ' '))
-  padding' <- do
-    nextChar <- peekChar
-    case nextChar of
-         Nothing  -> return 1
-         Just ' ' -> return 1
-         _        -> return numspaces
-  if numspaces > 0
-     then skip (==' ') -- skip space after marker
-     else return ()    -- blankline
+  padding' <- (1 <$ scanBlankline)
+          <|> (1 <$ (skip (==' ') *> lookAhead (count 4 (char ' '))))
+          <|> (T.length <$> takeWhile (==' '))
   guard $ padding' > 0
   return $ ListItem { listType = ty
                     , markerColumn = col

@@ -86,6 +86,16 @@ have consecutive lists:
 
     - one (new list)
 
+The blank lines break out of a list no matter how deeply it
+is nested:
+
+    - one
+      - two
+        - three
+
+
+    - new list
+
 ### Indentation of list continuations
 
 Block elements inside list items need not be indented four

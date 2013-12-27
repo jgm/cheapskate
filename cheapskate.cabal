@@ -31,7 +31,7 @@ library
                      Cheapskate.Types
                      Cheapskate.Render
   other-modules:     ParserCombinators
-  build-depends:     base >=4.4 && <4.7,
+  build-depends:     base >=4.4 && <4.8,
                      containers >=0.4 && <0.6,
                      mtl >=2.1 && <2.2,
                      network >=2.4 && <2.5,
@@ -45,7 +45,7 @@ executable markdown
   main-is:           markdown.hs
   hs-source-dirs:    bin
   other-extensions:  OverloadedStrings
-  build-depends:     base >=4.4 && <4.7,
+  build-depends:     base >=4.4 && <4.8,
                      cheapskate,
                      bytestring,
                      blaze-html >=0.6 && <0.7,

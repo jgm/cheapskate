@@ -12,7 +12,6 @@ import Data.Monoid
 import Data.Foldable (toList)
 import Data.Sequence (Seq, (<|), (|>), viewr, ViewR(..), singleton)
 import qualified Data.Sequence as Seq
-import Network.URI (escapeURIString)
 import Control.Monad.RWS
 import qualified Data.Map as M
 import Cheapskate.Types
@@ -825,8 +824,7 @@ pUri scheme = do
              c | c `elem` ".;?!:," ->
                (scheme <> ":" <> T.init x, singleton (Str (T.singleton c)))
              _ -> (scheme <> ":" <> x, mempty)
-  return $ singleton (Link (singleton $ Str rawuri) rawuri mempty) <>
-           endingpunct
+  return $ autoLink rawuri <> endingpunct
 
 -- Scan non-ascii characters and ascii characters allowed in a URI.
 -- We allow punctuation except when followed by a space, since
@@ -850,11 +848,6 @@ uriScanner st '+' = Just st
 uriScanner st '/' = Just st
 uriScanner _ c | isSpace c = Nothing
 uriScanner st _ = Just st
-
--- Escape a URI.
-escapeUri :: Text -> Text
-escapeUri = T.pack . escapeURIString
-               (\c -> isAscii c && not (isSpace c)) . T.unpack
 
 -- Parses material enclosed in *s, **s, _s, or __s.
 -- Designed to avoid backtracking.
@@ -997,8 +990,15 @@ pAutolink = do
          | otherwise   -> fail "Unknown contents of <>"
 
 autoLink :: Text -> Inlines
-autoLink t = singleton $ Link (singleton $ Str t) (escapeUri t) (T.empty)
+autoLink t = singleton $ Link (toInlines t) t (T.empty)
+  where toInlines t' = case parse pToInlines t' of
+                         Right r   -> r
+                         Left e    -> error $ "autolink: " ++ show e
+        pToInlines = mconcat <$> many strOrEntity
+        strOrEntity = ((singleton . Str) <$> takeWhile1 (/='&'))
+                   <|> pEntity
+                   <|> ((singleton . Str) <$> string "&")
 
 emailLink :: Text -> Inlines
 emailLink t = singleton $ Link (singleton $ Str t)
-                               (escapeUri $ "mailto:" <> t) (T.empty)
+                               ("mailto:" <> t) (T.empty)

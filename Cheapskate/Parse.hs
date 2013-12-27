@@ -60,6 +60,9 @@ data ContainerType = Document
                    | FencedCode { fence :: Text, info :: Text }
                    | IndentedCode
                    | RawHtmlBlock { openingHtml :: Text }
+                   | Reference { referenceLabel :: Text
+                               , referenceURL   :: Text
+                               , referenceTitle :: Text }
                    deriving (Eq, Show)
 
 instance Show Container where
@@ -79,7 +82,6 @@ data Leaf = TextLine Text
           | ATXHeader Int Text
           | SetextHeader Int Text
           | Rule
-          | Reference{ referenceLabel :: Text, referenceURL :: Text, referenceTitle :: Text }
           deriving (Show)
 
 type ContainerM = RWS () ReferenceMap ContainerStack
@@ -107,7 +109,6 @@ processElts refmap (L _lineNumber lf : rest) =
     SetextHeader lvl t -> singleton (Header lvl $ parseInlines refmap t) <>
                           processElts refmap rest
     Rule -> singleton HRule <> processElts refmap rest
-    Reference{} -> processElts refmap rest
 
 processElts refmap (C (Container ct cs) : rest) =
   case ct of
@@ -162,6 +163,7 @@ processElts refmap (C (Container ct cs) : rest) =
                         singleton (HtmlBlock txt) <> processElts refmap rest
                   where txt = openingHtml' <>
                                joinLines (map extractText (toList cs))
+    Reference{} -> processElts refmap rest
 
    where isBlankLine (L _ BlankLine{}) = True
          isBlankLine _ = False
@@ -194,20 +196,37 @@ closeStack = do
 closeContainer :: ContainerM ()
 closeContainer = do
   ContainerStack top rest <- get
-  case rest of
-       (Container ct' cs' : rs) ->
-         case top of
-              (Container li@ListItem{} cs'') ->
-                case viewr cs'' of
-                     (zs :> b@(L _ BlankLine{})) ->
-                       put $ ContainerStack
-                            (if Seq.null zs
-                                then Container ct' (cs' |> C (Container li zs))
-                                else Container ct' (cs' |>
-                                        C (Container li zs) |> b)) rs
-                     _ -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
-              _ -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
-       [] -> put $ ContainerStack top rest
+  case top of
+       (Container Reference{} cs'') ->
+         case parse pReference
+               (T.strip $ joinLines $ map extractText $ toList cs'') of
+              Right (lab, lnk, tit) -> do
+                tell (M.singleton (normalizeReference lab) (lnk, tit))
+                case rest of
+                    (Container ct' cs' : rs) ->
+                      put $ ContainerStack (Container ct' (cs' |> C top)) rs
+                    [] -> return ()
+              Left e -> -- pass over in silence if ref doesn't parse?
+                        case rest of
+                             (c:cs) -> put $ ContainerStack c cs
+                             []     -> return ()
+       (Container li@ListItem{} cs'') ->
+         case rest of
+              -- move final BlankLine outside of list item
+              (Container ct' cs' : rs) ->
+                       case viewr cs'' of
+                            (zs :> b@(L _ BlankLine{})) ->
+                              put $ ContainerStack
+                                   (if Seq.null zs
+                                       then Container ct' (cs' |> C (Container li zs))
+                                       else Container ct' (cs' |>
+                                               C (Container li zs) |> b)) rs
+                            _ -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
+              [] -> return ()
+       _ -> case rest of
+             (Container ct' cs' : rs) ->
+                 put $ ContainerStack (Container ct' (cs' |> C top)) rs
+             [] -> return ()
 
 addLeaf :: LineNumber -> Leaf -> ContainerM ()
 addLeaf lineNum lf = do
@@ -243,6 +262,8 @@ tryScanners cs t = case parse (scanners $ map scanner cs) t of
                                                 (markerColumn li + 1)
                                              upToCountChars (padding li) (==' ')
                                              return ())
+                       Reference{}    -> nfb scanBlankline >>
+                                         nfb scanReference
                        _              -> return ()
 
 containerize :: Bool -> Int -> Text -> ([ContainerType], Leaf)
@@ -275,6 +296,7 @@ verbatimContainerStart lastLineIsText = nfb scanBlankline *>
    (  parseCodeFence
   <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
   <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$> parseHtmlBlockStart))
+  <|> (guard (not lastLineIsText) *> (Reference mempty mempty mempty <$ scanReference))
    )
 
 leaf :: Bool -> Parser Leaf
@@ -283,7 +305,6 @@ leaf lastLineIsText = scanNonindentSpace *> (
          (T.strip . removeATXSuffix <$> takeText))
    <|> (guard lastLineIsText *> (SetextHeader <$> parseSetextHeaderLine <*> pure mempty))
    <|> (Rule <$ scanHRuleLine)
-   <|> (guard (not lastLineIsText) *> pReference)
    <|> textLineOrBlank
   )
   where removeATXSuffix t = case T.dropWhileEnd (`elem` " #") t of
@@ -329,11 +350,6 @@ processLine (lineNumber, txt) = do
            case (reverse ns, lf) of
              -- don't add blank line at beginning of fenced code or html block
              (FencedCode{}:_,  BlankLine{}) -> return ()
-             (_, Reference{ referenceLabel = lab,
-                            referenceURL = url,
-                            referenceTitle = tit }) ->
-               tell (M.singleton (normalizeReference lab) (url, tit))
-               >> addLeaf lineNumber lf
              _ -> addLeaf lineNumber lf
 
 -- Utility functions.
@@ -649,17 +665,21 @@ pLinkTitle = do
 
 -- A link reference is a square-bracketed link label, a colon,
 -- optional space or newline, a URL, optional space or newline,
--- and an optional link title.
-pReference :: Parser Leaf
+-- and an optional link title.  (Note:  we assume the input is
+-- pre-stripped, with no leading/trailing spaces.)
+pReference :: Parser (Text, Text, Text)
 pReference = do
   lab <- pLinkLabel
   char ':'
   scanSpnl
   url <- pLinkUrl
   tit <- option T.empty $ scanSpnl >> pLinkTitle
-  scanSpaces
   endOfInput
-  return $ Reference { referenceLabel = lab, referenceURL = url, referenceTitle = tit }
+  return (lab, url, tit)
+
+scanReference :: Scanner
+scanReference =
+  () <$ lookAhead (scanNonindentSpace >> pLinkLabel >> scanChar ':')
 
 -- Parses an escaped character and returns a Text.
 pEscaped :: Parser Text

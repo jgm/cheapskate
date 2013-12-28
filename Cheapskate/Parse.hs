@@ -61,9 +61,7 @@ data ContainerType = Document
                                 , info :: Text }
                    | IndentedCode
                    | RawHtmlBlock
-                   | Reference { referenceLabel :: Text
-                               , referenceURL   :: Text
-                               , referenceTitle :: Text }
+                   | Reference
                    deriving (Eq, Show)
 
 instance Show Container where
@@ -303,7 +301,7 @@ verbatimContainerStart lastLineIsText = nfb scanBlankline *>
    (  parseCodeFence
   <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
   <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$ parseHtmlBlockStart))
-  <|> (guard (not lastLineIsText) *> (Reference mempty mempty mempty <$ scanReference))
+  <|> (guard (not lastLineIsText) *> (Reference <$ scanReference))
    )
 
 leaf :: Bool -> Parser Leaf

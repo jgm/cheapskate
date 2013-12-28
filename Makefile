@@ -2,7 +2,7 @@ SHELL = /bin/bash
 PROG ?= dist/build/markdown/markdown
 BENCHPROGS ?= "pandoc -fmarkdown_strict+autolink_bare_uris+fenced_code_blocks+intraword_underscores"
 SOURCES=Cheapskate.hs Cheapskate/Parse.hs Cheapskate/Types.hs Cheapskate/Render.hs bin/markdown.hs ParserCombinators.hs
-.PHONY: prof test bench linecount clean
+.PHONY: prof test bench linecount clean fuzztest
 
 $(PROG): $(SOURCES)
 	cabal configure --user && cabal build
@@ -13,6 +13,11 @@ prof:
 
 test:
 	make -C tests --quiet clean all
+
+fuzztest:
+	cat /dev/random | head -c 100000 | iconv -f latin1 -t utf-8 | time $(PROG) >/dev/null ; \
+	cat /dev/random | head -c 1000000 | iconv -f latin1 -t utf-8 | time $(PROG) >/dev/null ; \
+	cat /dev/random | head -c 10000000 | iconv -f latin1 -t utf-8 | time $(PROG) >/dev/null
 
 bench:
 	for prog in $(PROG) $(BENCHPROGS); do \

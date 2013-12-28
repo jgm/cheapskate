@@ -1,10 +1,9 @@
 SHELL = /bin/bash
-PROG ?= dist/build/markdown/markdown
+PROG ?= dist/build/cheapskate/cheapskate
 BENCHPROGS ?= "pandoc -fmarkdown_strict+autolink_bare_uris+fenced_code_blocks+intraword_underscores"
-SOURCES=Cheapskate.hs Cheapskate/Parse.hs Cheapskate/Types.hs Cheapskate/Render.hs bin/markdown.hs ParserCombinators.hs
 .PHONY: prof test bench linecount clean fuzztest
 
-$(PROG): $(SOURCES)
+$(PROG):
 	cabal configure --user && cabal build
 
 prof:

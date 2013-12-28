@@ -19,12 +19,12 @@ size. (Try `make fuzztest`.)
 
 As an executable:
 
-    markdown [FILE*]
+    cheapskate [FILE*]
 
 As a library:
 
     {-# LANGUAGE OverloadedStrings #-}
-    import Cheapskate
+    import Text.Cheapskate
     import Text.Blaze.Html
 
     html :: Html

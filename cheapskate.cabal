@@ -26,14 +26,14 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:    .
-  exposed-modules:   Cheapskate
-                     Cheapskate.Parse
-                     Cheapskate.Types
-                     Cheapskate.Render
-  other-modules:     Cheapskate.Util
-                     Cheapskate.Inlines
-                     Cheapskate.ContainerStack
-                     ParserCombinators
+  exposed-modules:   Text.Cheapskate
+                     Text.Cheapskate.Parse
+                     Text.Cheapskate.Types
+                     Text.Cheapskate.Render
+  other-modules:     Text.Cheapskate.Util
+                     Text.Cheapskate.Inlines
+                     Text.Cheapskate.ContainerStack
+                     Text.ParserCombinators
   build-depends:     base >=4.4 && <4.8,
                      containers >=0.4 && <0.6,
                      mtl >=2.1 && <2.2,
@@ -43,8 +43,8 @@ library
   ghc-options:       -O -Wall -fno-warn-unused-do-bind
   ghc-prof-options:  -auto-all -caf-all -rtsopts
 
-executable markdown
-  main-is:           markdown.hs
+executable cheapskate
+  main-is:           cheapskate.hs
   hs-source-dirs:    bin
   other-extensions:  OverloadedStrings
   build-depends:     base >=4.4 && <4.8,

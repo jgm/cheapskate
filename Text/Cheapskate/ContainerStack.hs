@@ -1,4 +1,4 @@
-module Cheapskate.ContainerStack (
+module Text.Cheapskate.ContainerStack (
     ContainerStack(..)
   , LineNumber
   , Elt(..)
@@ -20,10 +20,10 @@ import Control.Monad.RWS
 import qualified Data.Map as M
 import Data.List (intercalate)
 import Data.Foldable (toList)
-import Cheapskate.Types
-import Cheapskate.Util
-import Cheapskate.Inlines
-import ParserCombinators
+import Text.Cheapskate.Types
+import Text.Cheapskate.Util
+import Text.Cheapskate.Inlines
+import Text.ParserCombinators
 
 data ContainerStack =
   ContainerStack Container {- top -} [Container] {- rest -}

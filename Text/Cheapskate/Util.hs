@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cheapskate.Util (
+module Text.Cheapskate.Util (
     joinLines
   , tabFilter
   , isWhitespace
@@ -22,7 +22,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Char
 import Control.Applicative
-import ParserCombinators
+import Text.ParserCombinators
 
 -- Utility functions.
 

@@ -1,9 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cheapskate.Inlines (parseInlines, pHtmlTag, pReference, pLinkLabel)
+module Text.Cheapskate.Inlines (
+        parseInlines
+      , pHtmlTag
+      , pReference
+      , pLinkLabel)
 where
-import ParserCombinators
-import Cheapskate.Util
-import Cheapskate.Types
+import Text.ParserCombinators
+import Text.Cheapskate.Util
+import Text.Cheapskate.Types
 import Data.Char hiding (Space)
 import qualified Data.Sequence as Seq
 import Data.Sequence (singleton, (<|), viewr, ViewR(..))

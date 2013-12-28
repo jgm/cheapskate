@@ -1,4 +1,4 @@
-module ParserCombinators (
+module Text.ParserCombinators (
     Position(..)
   , Parser
   , parse

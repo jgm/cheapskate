@@ -1,9 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cheapskate.Parse (parseMarkdown, processLines {- TODO for now -}) where
-import ParserCombinators
-import Cheapskate.Util
-import Cheapskate.ContainerStack
-import Cheapskate.Inlines
+module Text.Cheapskate.Parse (
+         parseMarkdown
+       , processLines {- TODO for now -}
+       ) where
+import Text.ParserCombinators
+import Text.Cheapskate.Util
+import Text.Cheapskate.ContainerStack
+import Text.Cheapskate.Inlines
+import Text.Cheapskate.Types
 import Data.Char hiding (Space)
 import qualified Data.Set as Set
 import Prelude hiding (takeWhile)
@@ -14,7 +18,6 @@ import Data.Monoid
 import Data.Foldable (toList)
 import Data.Sequence ((|>), viewr, ViewR(..), singleton)
 import Control.Monad.RWS
-import Cheapskate.Types
 import Control.Applicative
 
 -- import Debug.Trace

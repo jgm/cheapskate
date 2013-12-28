@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cheapskate.Render (renderBlocks) where
-import Cheapskate.Types
+module Text.Cheapskate.Render (renderBlocks) where
+import Text.Cheapskate.Types
 import Data.Text (Text)
 import Data.Char (isDigit, isHexDigit, isAlphaNum)
 import qualified Text.Blaze.XHtml5 as H

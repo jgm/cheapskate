@@ -1,4 +1,4 @@
-module Cheapskate.Types where
+module Text.Cheapskate.Types where
 import Data.Sequence (Seq)
 import Data.Text (Text)
 import qualified Data.Map as M

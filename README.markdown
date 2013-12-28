@@ -218,10 +218,9 @@ To run only tests that match a regex pattern, do
 
     PATT=Orig make test
 
-Note that not all tests currently pass.  Setting the environment
-variable `TIDY=1` will run the expected and actual output through
-tidy before comparing them.  You can run this test suite on another
-markdown processor by doing
+Setting the environment variable `TIDY=1` will run the expected and
+actual output through tidy before comparing them.  You can run this
+test suite on another markdown processor by doing
 
     PROG=myothermarkdown make test
 

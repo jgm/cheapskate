@@ -30,7 +30,8 @@ library
                      Cheapskate.Parse
                      Cheapskate.Types
                      Cheapskate.Render
-  other-modules:     ParserCombinators
+  other-modules:     Cheapskate.Util
+                     ParserCombinators
   build-depends:     base >=4.4 && <4.8,
                      containers >=0.4 && <0.6,
                      mtl >=2.1 && <2.2,

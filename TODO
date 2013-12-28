@@ -1,4 +1,3 @@
-- code to take output of processLines and create AST
-
-- add in inline parsing and rendering
+- Alternative renderer for [Tag Text] (to use with xss-sanitize)
+- Ability to manipulate code blocks
 

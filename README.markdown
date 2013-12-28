@@ -3,13 +3,39 @@
 This is an experimental Markdown processor.  (A cheapskate is
 always in search of the best markdown.) It aims to process
 Markdown efficiently and in the most forgiving possible way.
-It is about five times faster than pandoc---about the same
-as the C library peg-markdown---and uses a fifth the memory.
+It is about five times faster than pandoc and uses a fifth the memory.
+It is significantly faster (3:4) and much more accurate
+than the markdown package on Hackage.
 
 There is no such thing as an invalid Markdown document. Any
 string of characters is valid Markdown.  So the processor should
 finish efficiently no matter what input it gets. Garbage in
-should not cause an error or exponential slowdowns.
+should not cause an error or exponential slowdowns.  This processor
+has been tested on many large inputs consisting of random strings of
+characters, with fairly constant performance proportional to the input
+size. (Try `make fuzztest`.)
+
+## Usage
+
+As an executable:
+
+    markdown [FILE*]
+
+As a library:
+
+    {-# LANGUAGE OverloadedStrings #-}
+    import Cheapskate
+    import Text.Blaze.Html
+
+    html :: Html
+    html = renderBlocks $ parseMarkdown "Hello *world*"
+
+**Important note on security:** If the markdown input you are converting comes
+from an untrusted source (e.g. a web form), you should *always*
+sanitize the output using a library like `xss-sanitize` before displaying
+it on a web page.  It is *not* sufficient to sanitize only the raw HTML
+on the markdown page, as some libraries do, because this does not protect
+against possible XSS attacks via link and image attributes.
 
 ## Extensions
 

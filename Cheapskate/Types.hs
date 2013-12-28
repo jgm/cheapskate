@@ -1,6 +1,7 @@
 module Cheapskate.Types where
 import Data.Sequence (Seq)
 import Data.Text (Text)
+import qualified Data.Map as M
 
 -- Structured representation of a document.
 
@@ -46,4 +47,6 @@ data Inline = Str Text
             deriving Show
 
 type Inlines = Seq Inline
+
+type ReferenceMap = M.Map Text (Text, Text)
 

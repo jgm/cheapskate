@@ -4,12 +4,25 @@ module Cheapskate.Util (
   , tabFilter
   , isWhitespace
   , isEscapable
-  )
-  where
+  , normalizeReference
+  , Scanner
+  , scanIndentSpace
+  , scanNonindentSpace
+  , scanSpacesToColumn
+  , scanChar
+  , scanBlankline
+  , scanSpaces
+  , scanSpnl
+  , nfb
+  , nfbChar
+  , upToCountChars
+  ) where
 
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Char
+import Control.Applicative
+import ParserCombinators
 
 -- Utility functions.
 
@@ -45,4 +58,62 @@ isWhitespace _    = False
 isEscapable :: Char -> Bool
 isEscapable c = isAscii c && (isSymbol c || isPunctuation c)
 
+-- Link references are case sensitive and ignore line breaks
+-- and repeated spaces.
+-- So, [APPLES are good] == [Apples are good] ==
+-- [Apples
+-- are     good].
+normalizeReference :: Text -> Text
+normalizeReference = T.toUpper . T.concat . T.split isWhitespace
 
+-- Scanners are implemented here as attoparsec parsers,
+-- which consume input and capture nothing.  They could easily
+-- be implemented as regexes in other languages, or hand-coded.
+-- With the exception of scanSpnl, they are all intended to
+-- operate on a single line of input (so endOfInput = endOfLine).
+type Scanner = Parser ()
+
+-- Scan four spaces.
+scanIndentSpace :: Scanner
+scanIndentSpace = () <$ count 4 (skip (==' '))
+
+scanSpacesToColumn :: Int -> Scanner
+scanSpacesToColumn col = do
+  currentCol <- column <$> getPosition
+  case col - currentCol of
+       n | n >= 1 -> () <$ (count n (skip (==' ')))
+         | otherwise -> return ()
+
+-- Scan 0-3 spaces.
+scanNonindentSpace :: Scanner
+scanNonindentSpace = () <$ upToCountChars 3 (==' ')
+
+-- Scan a specified character.
+scanChar :: Char -> Scanner
+scanChar c = char c >> return ()
+
+-- Scan a blankline.
+scanBlankline :: Scanner
+scanBlankline = skipWhile (==' ') *> endOfInput
+
+-- Scan 0 or more spaces
+scanSpaces :: Scanner
+scanSpaces = skipWhile (==' ')
+
+-- Scan 0 or more spaces, and optionally a newline
+-- and more spaces.
+scanSpnl :: Scanner
+scanSpnl = scanSpaces *> option () (char '\n' *> scanSpaces)
+
+-- Not followed by: Succeed without consuming input if the specified
+-- scanner would not succeed.
+nfb :: Parser a -> Scanner
+nfb = notFollowedBy
+
+-- Succeed if not followed by a character. Consumes no input.
+nfbChar :: Char -> Scanner
+nfbChar c = nfb (skip (==c))
+
+upToCountChars :: Int -> (Char -> Bool) -> Parser Text
+upToCountChars cnt f =
+  scan 0 (\n c -> if n < cnt && f c then Just (n+1) else Nothing)

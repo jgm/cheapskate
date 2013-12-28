@@ -107,8 +107,26 @@ the list item.  So, the following is a list item with two paragraphs:
 
      two
 
-This implies that code blocks inside list items must be indented
-five spaces past the bullet or numerical list marker.
+The amount of indentation required for an indented code block
+inside a list item depends on the first line of the list item.
+Generally speaking, code must be indented four spaces past the
+first non-space character after the list marker.  Thus:
+
+     -   My code
+
+             {code here}
+
+     - My code
+
+           {code here}
+
+When the first line itself contains indented code, then subsequent
+indented code blocks should be indented five spaces past the list
+marker:
+
+     -     { code }
+
+           { more code }
 
 ### Raw HTML blocks
 

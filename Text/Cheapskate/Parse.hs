@@ -33,14 +33,16 @@ processDocument (Container ct cs, refmap) =
     _        -> error "top level container is not Document"
 
 
--- Recursively generate blocks.
+-- Turn the result of `processLines` into a proper AST.
 -- This requires grouping text lines into paragraphs
 -- and list items into lists, handling blank lines,
 -- parsing inline contents of texts and resolving referencess.
 processElts :: ReferenceMap -> [Elt] -> Blocks
 processElts _ [] = mempty
+
 processElts refmap (L _lineNumber lf : rest) =
   case lf of
+    -- Gobble text lines and make them into a Para:
     TextLine t -> singleton (Para $ parseInlines refmap txt) <>
                   processElts refmap rest'
                where txt = T.stripEnd $ joinLines $ map T.stripStart
@@ -48,17 +50,29 @@ processElts refmap (L _lineNumber lf : rest) =
                      (textlines, rest') = span isTextLine rest
                      isTextLine (L _ (TextLine _)) = True
                      isTextLine _ = False
+
+    -- Blanks at outer level are ignored:
     BlankLine{} -> processElts refmap rest
+
+    -- Headers:
     ATXHeader lvl t -> singleton (Header lvl $ parseInlines refmap t) <>
                        processElts refmap rest
     SetextHeader lvl t -> singleton (Header lvl $ parseInlines refmap t) <>
                           processElts refmap rest
+
+    -- Horizontal rule:
     Rule -> singleton HRule <> processElts refmap rest
+
 processElts refmap (C (Container ct cs) : rest) =
   case ct of
     Document -> error "Document container found inside Document"
+
     BlockQuote -> singleton (Blockquote $ processElts refmap (toList cs)) <>
                   processElts refmap rest
+
+    -- List item?  Gobble up following list items of the same type
+    -- (skipping blank lines), determine whether the list is tight or
+    -- loose, and generate a List.
     ListItem { listType = listType' } ->
         singleton (List isTight listType' items') <> processElts refmap rest'
               where xs = takeListItems rest
@@ -80,12 +94,14 @@ processElts refmap (C (Container ct cs) : rest) =
                     items' = map (processElts refmap) items
                     isTight = not (any isBlankLine xs) &&
                               all tightListItem items
+
     FencedCode _ _ info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
                   where txt = joinLines $ map extractText $ toList cs
                         attr = case T.words info' of
                                   []    -> CodeAttr Nothing
                                   (w:_) -> CodeAttr (Just w)
+
     IndentedCode -> singleton (CodeBlock (CodeAttr Nothing) txt)
                     <> processElts refmap rest'
                   where txt = joinLines $ stripTrailingEmpties
@@ -93,9 +109,9 @@ processElts refmap (C (Container ct cs) : rest) =
                         stripTrailingEmpties = reverse .
                           dropWhile (T.all (==' ')) . reverse
                         -- explanation for next line:  when we parsed
-                        -- the blank line, we dropped nonindent spaces.
+                        -- the blank line, we dropped 0-3 spaces.
                         -- but for this, code block context, we want
-                        -- to have dropped indent spaces. we simply drop
+                        -- to have dropped 4 spaces. we simply drop
                         -- one more:
                         extractCode (L _ (BlankLine t)) = [T.drop 1 t]
                         extractCode (C (Container IndentedCode cs')) =
@@ -110,6 +126,8 @@ processElts refmap (C (Container ct cs) : rest) =
 
     RawHtmlBlock -> singleton (HtmlBlock txt) <> processElts refmap rest
                   where txt = joinLines (map extractText (toList cs))
+
+    -- References have already been taken into account in the reference map.
     Reference{} -> processElts refmap rest
 
    where isBlankLine (L _ BlankLine{}) = True
@@ -124,6 +142,73 @@ processLines t = (doc, refmap)
   (doc, refmap) = evalRWS (mapM_ processLine lns >> closeStack) () startState
   lns        = zip [1..] (map tabFilter $ T.lines t)
   startState = ContainerStack (Container Document mempty) []
+
+-- The main block-parsing function.
+-- We analyze a line of text and modify the container stack accordingly,
+-- adding a new leaf, or closing or opening containers.
+processLine :: (LineNumber, Text) -> ContainerM ()
+processLine (lineNumber, txt) = do
+  ContainerStack top@(Container ct cs) rest <- get
+
+  -- Apply the line-start scanners appropriate for each nested container.
+  -- Return the remainder of the string, and the number of unmatched
+  -- containers.
+  let (t', numUnmatched) = tryScanners (reverse $ top:rest) txt
+
+  -- Some new containers can be started only after a blank.
+  let lastLineIsText = numUnmatched == 0 &&
+                       case viewr cs of
+                            (_ :> L _ (TextLine _)) -> True
+                            _                       -> False
+
+  -- Process the rest of the line in a way that makes sense given
+  -- the container type at the top of the stack (ct):
+  case ct of
+    -- If it's a verbatim line container, add the line.
+    RawHtmlBlock{} | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
+    IndentedCode   | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
+    FencedCode{ fence = fence' } ->
+    -- here we don't check numUnmatched because we allow laziness
+      if fence' `T.isPrefixOf` t'
+         -- closing code fence
+         then closeContainer
+         else addLeaf lineNumber (TextLine t')
+
+    -- otherwise, parse the remainder to see if we have new container starts:
+    _ -> case containerize lastLineIsText (T.length txt - T.length t') t' of
+
+       ([], TextLine t) ->  -- no new containers, just a text line
+         case viewr cs of
+            -- if last child of top container is text line, then
+            -- we don't need to close unmatched containers, because this can be
+            -- a lazy continuation:
+            (_ :> L _ (TextLine _))
+              | ct /= IndentedCode -> addLeaf lineNumber (TextLine t)
+            -- otherwise, close unmatched containers before adding the line
+            _ -> replicateM numUnmatched closeContainer
+                 >> addLeaf lineNumber (TextLine t)
+
+       -- if it's a setext header line and the top container has a textline
+       -- as last child, add a setext header:
+       ([], SetextHeader lev _) | numUnmatched == 0 ->
+           case viewr cs of
+             (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
+               put $ ContainerStack (Container ct
+                        (cs' |> L lineNumber (SetextHeader lev t))) rest
+               -- Note: the following case should not occur, since
+               -- we don't add a SetextHeader leaf unless lastLineIsText.
+             _ -> error "setext header line without preceding text line"
+
+       -- otherwise, close all the unmatched containers, add the new
+       -- containers, and finally add the new leaf:
+       (ns, lf) -> do -- close unmatched containers, add new ones
+           replicateM numUnmatched closeContainer
+           mapM_ addContainer ns
+           case (reverse ns, lf) of
+             -- don't add extra blank at beginning of fenced code block
+             (FencedCode{}:_,  BlankLine{}) -> return ()
+             _ -> addLeaf lineNumber lf
+
 
 tryScanners :: [Container] -> Text -> (Text, Int)
 tryScanners cs t = case parse (scanners $ map scanner cs) t of
@@ -196,72 +281,6 @@ leaf lastLineIsText = scanNonindentSpace *> (
                                       -- an escaped \#
                                     | T.last t' == '\\' -> t' <> "#"
                                     | otherwise -> t'
-
--- The main block-parsing function.
--- We analyze a line of text and modify the container stack accordingly,
--- adding a new leaf, or closing or opening containers.
-processLine :: (LineNumber, Text) -> ContainerM ()
-processLine (lineNumber, txt) = do
-  ContainerStack top@(Container ct cs) rest <- get
-
-  -- Apply the line-start scanners appropriate for each nested container.
-  -- Return the remainder of the string, and the number of unmatched
-  -- containers.
-  let (t', numUnmatched) = tryScanners (reverse $ top:rest) txt
-
-  -- Some new containers can be started only after a blank.
-  let lastLineIsText = numUnmatched == 0 &&
-                       case viewr cs of
-                            (_ :> L _ (TextLine _)) -> True
-                            _                       -> False
-
-  -- Process the rest of the line in a way that makes sense given
-  -- the container type at the top of the stack (ct):
-  case ct of
-    -- If it's a verbatim line container, add the line.
-    RawHtmlBlock{} | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
-    IndentedCode   | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
-    FencedCode{ fence = fence' } ->
-    -- here we don't check numUnmatched because we allow laziness
-      if fence' `T.isPrefixOf` t'
-         -- closing code fence
-         then closeContainer
-         else addLeaf lineNumber (TextLine t')
-
-    -- otherwise, parse the remainder to see if we have new container starts:
-    _ -> case containerize lastLineIsText (T.length txt - T.length t') t' of
-
-       ([], TextLine t) ->  -- no new containers, just a text line
-         case viewr cs of
-            -- if last child of top container is text line, then
-            -- we don't need to close unmatched containers, because this can be
-            -- a lazy continuation:
-            (_ :> L _ (TextLine _))
-              | ct /= IndentedCode -> addLeaf lineNumber (TextLine t)
-            -- otherwise, close unmatched containers before adding the line
-            _ -> replicateM numUnmatched closeContainer
-                 >> addLeaf lineNumber (TextLine t)
-
-       -- if it's a setext header line and the top container has a textline
-       -- as last child, add a setext header:
-       ([], SetextHeader lev _) | numUnmatched == 0 ->
-           case viewr cs of
-             (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
-               put $ ContainerStack (Container ct
-                        (cs' |> L lineNumber (SetextHeader lev t))) rest
-               -- Note: the following case should not occur, since
-               -- we don't add a SetextHeader leaf unless lastLineIsText.
-             _ -> error "setext header line without preceding text line"
-
-       -- otherwise, close all the unmatched containers, add the new
-       -- containers, and finally add the new leaf:
-       (ns, lf) -> do -- close unmatched containers, add new ones
-           replicateM numUnmatched closeContainer
-           mapM_ addContainer ns
-           case (reverse ns, lf) of
-             -- don't add extra blank at beginning of fenced code block
-             (FencedCode{}:_,  BlankLine{}) -> return ()
-             _ -> addLeaf lineNumber lf
 
 -- Scanners.
 

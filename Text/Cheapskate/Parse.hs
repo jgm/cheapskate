@@ -197,16 +197,28 @@ leaf lastLineIsText = scanNonindentSpace *> (
                                     | T.last t' == '\\' -> t' <> "#"
                                     | otherwise -> t'
 
-
+-- The main block-parsing function.
+-- We analyze a line of text and modify the container stack accordingly,
+-- adding a new leaf, or closing or opening containers.
 processLine :: (LineNumber, Text) -> ContainerM ()
 processLine (lineNumber, txt) = do
   ContainerStack top@(Container ct cs) rest <- get
+
+  -- Apply the line-start scanners appropriate for each nested container.
+  -- Return the remainder of the string, and the number of unmatched
+  -- containers.
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) txt
+
+  -- Some new containers can be started only after a blank.
   let lastLineIsText = numUnmatched == 0 &&
                        case viewr cs of
                             (_ :> L _ (TextLine _)) -> True
                             _                       -> False
+
+  -- Process the rest of the line in a way that makes sense given
+  -- the container type at the top of the stack (ct):
   case ct of
+    -- If it's a verbatim line container, add the line.
     RawHtmlBlock{} | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     IndentedCode   | numUnmatched == 0 -> addLeaf lineNumber (TextLine t')
     FencedCode{ fence = fence' } ->
@@ -215,25 +227,39 @@ processLine (lineNumber, txt) = do
          -- closing code fence
          then closeContainer
          else addLeaf lineNumber (TextLine t')
+
+    -- otherwise, parse the remainder to see if we have new container starts:
     _ -> case containerize lastLineIsText (T.length txt - T.length t') t' of
-       ([], TextLine t) ->
+
+       ([], TextLine t) ->  -- no new containers, just a text line
          case viewr cs of
-            -- lazy continuation?
+            -- if last child of top container is text line, then
+            -- we don't need to close unmatched containers, because this can be
+            -- a lazy continuation:
             (_ :> L _ (TextLine _))
               | ct /= IndentedCode -> addLeaf lineNumber (TextLine t)
-            _ -> replicateM numUnmatched closeContainer >> addLeaf lineNumber (TextLine t)
+            -- otherwise, close unmatched containers before adding the line
+            _ -> replicateM numUnmatched closeContainer
+                 >> addLeaf lineNumber (TextLine t)
+
+       -- if it's a setext header line and the top container has a textline
+       -- as last child, add a setext header:
        ([], SetextHeader lev _) | numUnmatched == 0 ->
            case viewr cs of
              (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
-               put $ ContainerStack (Container ct (cs' |> L lineNumber (SetextHeader lev t))) rest
+               put $ ContainerStack (Container ct
+                        (cs' |> L lineNumber (SetextHeader lev t))) rest
                -- Note: the following case should not occur, since
                -- we don't add a SetextHeader leaf unless lastLineIsText.
              _ -> error "setext header line without preceding text line"
+
+       -- otherwise, close all the unmatched containers, add the new
+       -- containers, and finally add the new leaf:
        (ns, lf) -> do -- close unmatched containers, add new ones
            replicateM numUnmatched closeContainer
            mapM_ addContainer ns
            case (reverse ns, lf) of
-             -- don't add blank line at beginning of fenced code or html block
+             -- don't add extra blank at beginning of fenced code block
              (FencedCode{}:_,  BlankLine{}) -> return ()
              _ -> addLeaf lineNumber lf
 

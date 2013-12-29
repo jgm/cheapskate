@@ -3,8 +3,8 @@
 This is an experimental Markdown processor.  (A cheapskate is
 always in search of the best markdown.) It aims to process
 Markdown efficiently and in the most forgiving possible way.
-It is about five times faster than pandoc and uses a fifth the memory.
-It is significantly faster (3:4) and much more accurate
+It is about seven times faster than pandoc and uses a fifth the memory.
+It is significantly faster, and much more accurate,
 than the markdown package on Hackage.
 
 There is no such thing as an invalid Markdown document. Any

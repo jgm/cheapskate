@@ -68,6 +68,7 @@ instance Functor Parser where
     case g st of
          Right (st', x) -> Right (st', f x)
          Left e         -> Left e
+  {-# INLINE fmap #-}
 
 instance Applicative Parser where
   pure x = Parser $ \st -> Right (st, x)
@@ -77,6 +78,8 @@ instance Applicative Parser where
          Right (st', h) -> case g st' of
                                 Right (st'', x) -> Right (st'', h x)
                                 Left e          -> Left e
+  {-# INLINE pure #-}
+  {-# INLINE (<*>) #-}
 
 instance Alternative Parser where
   empty = Parser $ \st -> Left $ ParseError (position st) "empty"
@@ -84,6 +87,8 @@ instance Alternative Parser where
     case f st of
          Right res  -> Right res
          _          -> g st
+  {-# INLINE empty #-}
+  {-# INLINE (<|>) #-}
 
 instance Monad Parser where
   return x = Parser $ \st -> Right (st, x)
@@ -92,6 +97,8 @@ instance Monad Parser where
     case evalParser p st of
          Left e        -> Left e
          Right (st',x) -> evalParser (g x) st'
+  {-# INLINE return #-}
+  {-# INLINE (>>=) #-}
 
 instance MonadPlus Parser where
   mzero = Parser $ \st -> Left $ ParseError (position st) "mzero"
@@ -99,6 +106,8 @@ instance MonadPlus Parser where
     case evalParser p1 st of
          Right res  -> Right res
          Left _     -> evalParser p2 st
+  {-# INLINE mzero #-}
+  {-# INLINE mplus #-}
 
 parse :: Parser a -> Text -> Either ParseError a
 parse p t =
@@ -106,9 +115,11 @@ parse p t =
 
 failure :: ParserState -> String -> Either ParseError (ParserState, a)
 failure st msg = Left $ ParseError (position st) msg
+{-# INLINE failure #-}
 
 success :: ParserState -> a -> Either ParseError (ParserState, a)
 success st x = Right (st, x)
+{-# INLINE success #-}
 
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy f = Parser g
@@ -116,12 +127,14 @@ satisfy f = Parser g
                     Just (c, _) | f c ->
                          success (advance st (T.singleton c)) c
                     _ -> failure st "satisfy"
+{-# INLINE satisfy #-}
 
 peekChar :: Parser (Maybe Char)
 peekChar = Parser $ \st ->
              case T.uncons (subject st) of
                   Just (c, _) -> success st (Just c)
                   Nothing     -> success st Nothing
+{-# INLINE peekChar #-}
 
 -- not efficient as in attoparsec
 inClass :: String -> Char -> Bool
@@ -135,15 +148,19 @@ endOfInput = Parser $ \st ->
   if T.null (subject st)
      then success st ()
      else failure st "endOfInput"
+{-# INLINE endOfInput #-}
 
 char :: Char -> Parser Char
 char c = satisfy (== c)
+{-# INLINE char #-}
 
 anyChar :: Parser Char
 anyChar = satisfy (const True)
+{-# INLINE anyChar #-}
 
 getPosition :: Parser Position
 getPosition = Parser $ \st -> success st (position st)
+{-# INLINE getPosition #-}
 
 -- note: this does not actually change the position in the subject;
 -- it only changes what column counts as column N.  It is intended
@@ -151,42 +168,50 @@ getPosition = Parser $ \st -> success st (position st)
 -- have accurate column information.
 setPosition :: Position -> Parser ()
 setPosition pos = Parser $ \st -> success st{ position = pos } ()
+{-# INLINE setPosition #-}
 
 takeWhile :: (Char -> Bool) -> Parser Text
 takeWhile f = Parser $ \st ->
   let t = T.takeWhile f (subject st) in
   success (advance st t) t
+{-# INLINE takeWhile #-}
 
 takeTill :: (Char -> Bool) -> Parser Text
 takeTill f = takeWhile (not . f)
+{-# INLINE takeTill #-}
 
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 f = Parser $ \st ->
   case T.takeWhile f (subject st) of
        t | T.null t  -> failure st "takeWhile1"
          | otherwise -> success (advance st t) t
+{-# INLINE takeWhile1 #-}
 
 takeText :: Parser Text
 takeText = Parser $ \st ->
   let t = subject st in
   success (advance st t) t
+{-# INLINE takeText #-}
 
 skip :: (Char -> Bool) -> Parser ()
 skip f = Parser $ \st ->
   case T.uncons (subject st) of
        Just (c,_) | f c -> success (advance st (T.singleton c)) ()
        _                -> failure st "skip"
+{-# INLINE skip #-}
 
 skipWhile :: (Char -> Bool) -> Parser ()
 skipWhile f = Parser $ \st ->
   let t' = T.takeWhile f (subject st) in
   success (advance st t') ()
+{-# INLINE skipWhile #-}
 
 string :: Text -> Parser Text
 string s = Parser $ \st ->
   if s `T.isPrefixOf` (subject st)
      then success (advance st s) s
      else failure st "string"
+{-# INLINE string #-}
 
 scan :: s -> (s -> Char -> Maybe s) -> Parser Text
 scan s0 f = Parser $ go s0 []
@@ -199,37 +224,46 @@ scan s0 f = Parser $ go s0 []
                                   Nothing -> finish st cs
         finish st cs =
             success st (T.pack (reverse cs))
+{-# INLINE scan #-}
 
 lookAhead :: Parser a -> Parser a
 lookAhead p = Parser $ \st ->
   case evalParser p st of
        Right (_,x) -> success st x
        Left _      -> failure st "lookAhead"
+{-# INLINE lookAhead #-}
 
 notFollowedBy :: Parser a -> Parser ()
 notFollowedBy p = Parser $ \st ->
   case evalParser p st of
        Right (_,_) -> failure st "notFollowedBy"
        Left _      -> success st ()
+{-# INLINE notFollowedBy #-}
 
 -- combinators (definitions borrowed from attoparsec)
 
 option :: Alternative f => a -> f a -> f a
 option x p = p <|> pure x
+{-# INLINE option #-}
 
 many1 :: Alternative f => f a -> f [a]
 many1 p = liftA2 (:) p (many p)
+{-# INLINE many1 #-}
 
 manyTill :: Alternative f => f a -> f b -> f [a]
 manyTill p end = go
   where go = (end *> pure []) <|> liftA2 (:) p go
+{-# INLINE manyTill #-}
 
 skipMany :: Alternative f => f a -> f ()
 skipMany p = go
   where go = (p *> go) <|> pure ()
+{-# INLINE skipMany #-}
 
 skipMany1 :: Alternative f => f a -> f ()
 skipMany1 p = p *> skipMany p
+{-# INLINE skipMany1 #-}
 
 count :: Monad m => Int -> m a -> m [a]
 count n p = sequence (replicate n p)
+{-# INLINE count #-}

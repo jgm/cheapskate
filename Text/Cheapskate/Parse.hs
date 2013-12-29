@@ -123,7 +123,7 @@ processLines t = (doc, refmap)
   where
   (doc, refmap) = evalRWS (mapM_ processLine lns >> closeStack) () startState
   lns        = zip [1..] (map tabFilter $ T.lines t)
-  startState = ContainerStack (Container Document mempty) []
+  startState = ContainerState (ContainerStack (Container Document mempty) []) []
 
 tryScanners :: [Container] -> Text -> (Text, Int)
 tryScanners cs t = case parse (scanners $ map scanner cs) t of
@@ -200,7 +200,7 @@ leaf lastLineIsText = scanNonindentSpace *> (
 
 processLine :: (LineNumber, Text) -> ContainerM ()
 processLine (lineNumber, txt) = do
-  ContainerStack top@(Container ct cs) rest <- get
+  ContainerStack top@(Container ct cs) rest <- getStack
   let (t', numUnmatched) = tryScanners (reverse $ top:rest) txt
   let lastLineIsText = numUnmatched == 0 &&
                        case viewr cs of
@@ -225,7 +225,7 @@ processLine (lineNumber, txt) = do
        ([], SetextHeader lev _) | numUnmatched == 0 ->
            case viewr cs of
              (cs' :> L _ (TextLine t)) -> -- replace last text line with setext header
-               put $ ContainerStack (Container ct (cs' |> L lineNumber (SetextHeader lev t))) rest
+               updateStack $ \_ -> ContainerStack (Container ct (cs' |> L lineNumber (SetextHeader lev t))) rest
                -- Note: the following case should not occur, since
                -- we don't add a SetextHeader leaf unless lastLineIsText.
              _ -> error "setext header line without preceding text line"

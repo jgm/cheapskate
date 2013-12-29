@@ -5,7 +5,13 @@ module Text.Cheapskate.ContainerStack (
   , Container(..)
   , ContainerType(..)
   , Leaf(..)
+  , ContainerState(..)
   , ContainerM
+  , getStack
+  , updateStack
+  , getBlanks
+  , addBlank
+  , clearBlanks
   , addLeaf
   , addContainer
   , closeStack
@@ -24,9 +30,10 @@ import Text.Cheapskate.Types
 import Text.Cheapskate.Util
 import Text.Cheapskate.Inlines
 import Text.ParserCombinators
+import Control.Applicative
 
 data ContainerStack =
-  ContainerStack Container {- top -} [Container] {- rest -}
+  ContainerStack Container {- top -} [Container] {- rest -} deriving Show
 
 type LineNumber   = Int
 
@@ -71,18 +78,38 @@ data Leaf = TextLine Text
           | Rule
           deriving (Show)
 
-type ContainerM = RWS () ReferenceMap ContainerStack
+data ContainerState = ContainerState{
+    stack   :: ContainerStack
+  , blanks  :: [Text]
+  } deriving Show
+
+type ContainerM = RWS () ReferenceMap ContainerState
+
+getStack :: ContainerM ContainerStack
+getStack = gets stack
+
+updateStack :: (ContainerStack -> ContainerStack) -> ContainerM ()
+updateStack f = modify $ \st -> st{ stack = f (stack st) }
+
+getBlanks :: ContainerM [Text]
+getBlanks = reverse <$> gets blanks
+
+addBlank :: Text -> ContainerM ()
+addBlank t = modify $ \st -> st { blanks = t : blanks st }
+
+clearBlanks :: ContainerM ()
+clearBlanks = modify $ \st -> st { blanks = [] }
 
 closeStack :: ContainerM Container
 closeStack = do
-  ContainerStack top rest  <- get
+  ContainerStack top rest  <- getStack
   if null rest
      then return top
      else closeContainer >> closeStack
 
 closeContainer :: ContainerM ()
 closeContainer = do
-  ContainerStack top rest <- get
+  ContainerStack top rest <- getStack
   case top of
        (Container Reference{} cs'') ->
          case parse pReference
@@ -91,11 +118,11 @@ closeContainer = do
                 tell (M.singleton (normalizeReference lab) (lnk, tit))
                 case rest of
                     (Container ct' cs' : rs) ->
-                      put $ ContainerStack (Container ct' (cs' |> C top)) rs
+                      updateStack $ \_ -> ContainerStack (Container ct' (cs' |> C top)) rs
                     [] -> return ()
               Left _ -> -- pass over in silence if ref doesn't parse?
                         case rest of
-                             (c:cs) -> put $ ContainerStack c cs
+                             (c:cs) -> updateStack $ \_ -> ContainerStack c cs
                              []     -> return ()
        (Container li@ListItem{} cs'') ->
          case rest of
@@ -103,32 +130,32 @@ closeContainer = do
               (Container ct' cs' : rs) ->
                        case viewr cs'' of
                             (zs :> b@(L _ BlankLine{})) ->
-                              put $ ContainerStack
+                              updateStack $ \_ -> ContainerStack
                                    (if Seq.null zs
                                        then Container ct' (cs' |> C (Container li zs))
                                        else Container ct' (cs' |>
                                                C (Container li zs) |> b)) rs
-                            _ -> put $ ContainerStack (Container ct' (cs' |> C top)) rs
+                            _ -> updateStack $ \_ -> ContainerStack (Container ct' (cs' |> C top)) rs
               [] -> return ()
        _ -> case rest of
              (Container ct' cs' : rs) ->
-                 put $ ContainerStack (Container ct' (cs' |> C top)) rs
+                 updateStack $ \_ -> ContainerStack (Container ct' (cs' |> C top)) rs
              [] -> return ()
 
 addLeaf :: LineNumber -> Leaf -> ContainerM ()
 addLeaf lineNum lf = do
-  ContainerStack top rest <- get
+  ContainerStack top rest <- getStack
   case (top, lf) of
         (Container ct@(ListItem{}) cs, BlankLine{}) ->
           case viewr cs of
             (_ :> L _ BlankLine{}) -> -- two blanks break out of list item:
                  closeContainer >> addLeaf lineNum lf
-            _ -> put $ ContainerStack (Container ct (cs |> L lineNum lf)) rest
+            _ -> updateStack $ \_ -> ContainerStack (Container ct (cs |> L lineNum lf)) rest
         (Container ct cs, _) ->
-                 put $ ContainerStack (Container ct (cs |> L lineNum lf)) rest
+                 updateStack $ \_ -> ContainerStack (Container ct (cs |> L lineNum lf)) rest
 
 addContainer :: ContainerType -> ContainerM ()
-addContainer ct = modify $ \(ContainerStack top rest) ->
+addContainer ct = updateStack $ \(ContainerStack top rest) ->
   ContainerStack (Container ct mempty) (top:rest)
 
 extractText :: Elt -> Text

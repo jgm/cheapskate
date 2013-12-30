@@ -69,6 +69,38 @@ showElt (C c) = show c
 showElt (L _ (TextLine s)) = show s
 showElt (L _ lf) = show lf
 
+containerContinue :: Container -> Scanner
+containerContinue c =
+  case containerType c of
+       BlockQuote     -> scanBlockquoteStart
+       IndentedCode   -> scanIndentSpace
+       FencedCode{startColumn = col} ->
+                         scanSpacesToColumn col
+       RawHtmlBlock   -> nfb scanBlankline
+       li@ListItem{}  -> scanBlankline
+                         <|>
+                         (do scanSpacesToColumn
+                                (markerColumn li + 1)
+                             upToCountChars (padding li - 1)
+                                (==' ')
+                             return ())
+       Reference{}    -> nfb scanBlankline >>
+                         nfb scanReference
+       _              -> return ()
+
+containerStart :: Bool -> Parser ContainerType
+containerStart _lastLineIsText =
+      (BlockQuote <$ scanBlockquoteStart)
+  <|> parseListMarker
+
+verbatimContainerStart :: Bool -> Parser ContainerType
+verbatimContainerStart lastLineIsText = nfb scanBlankline *>
+   (  parseCodeFence
+  <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
+  <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$ parseHtmlBlockStart))
+  <|> (guard (not lastLineIsText) *> (Reference <$ scanReference))
+   )
+
 data Leaf = TextLine Text
           | BlankLine Text
           | ATXHeader Int Text
@@ -266,7 +298,7 @@ processLine (lineNumber, txt) = do
   -- Apply the line-start scanners appropriate for each nested container.
   -- Return the remainder of the string, and the number of unmatched
   -- containers.
-  let (t', numUnmatched) = tryScanners (reverse $ top:rest) txt
+  let (t', numUnmatched) = tryOldContainers (reverse $ top:rest) txt
 
   -- Some new containers can be started only after a blank.
   let lastLineIsText = numUnmatched == 0 &&
@@ -288,7 +320,7 @@ processLine (lineNumber, txt) = do
          else addLeaf lineNumber (TextLine t')
 
     -- otherwise, parse the remainder to see if we have new container starts:
-    _ -> case containerize lastLineIsText (T.length txt - T.length t') t' of
+    _ -> case tryNewContainers lastLineIsText (T.length txt - T.length t') t' of
 
        ([], TextLine t) ->  -- no new containers, just a text line
          case viewr cs of
@@ -323,33 +355,17 @@ processLine (lineNumber, txt) = do
              _ -> addLeaf lineNumber lf
 
 
-tryScanners :: [Container] -> Text -> (Text, Int)
-tryScanners cs t = case parse (scanners $ map scanner cs) t of
+tryOldContainers :: [Container] -> Text -> (Text, Int)
+tryOldContainers cs t = case parse (scanners $ map containerContinue cs) t of
                         Right (t', n)  -> (t', n)
                         Left e         -> error $ "error parsing scanners: " ++
                                            show e
   where scanners [] = (,) <$> takeText <*> pure 0
         scanners (p:ps) = (p *> scanners ps)
                       <|> ((,) <$> takeText <*> pure (length (p:ps)))
-        scanner c = case containerType c of
-                       BlockQuote     -> scanBlockquoteStart
-                       IndentedCode   -> scanIndentSpace
-                       FencedCode{startColumn = col} ->
-                                         scanSpacesToColumn col
-                       RawHtmlBlock   -> nfb scanBlankline
-                       li@ListItem{}  -> scanBlankline
-                                         <|>
-                                         (do scanSpacesToColumn
-                                                (markerColumn li + 1)
-                                             upToCountChars (padding li - 1)
-                                                (==' ')
-                                             return ())
-                       Reference{}    -> nfb scanBlankline >>
-                                         nfb scanReference
-                       _              -> return ()
 
-containerize :: Bool -> Int -> Text -> ([ContainerType], Leaf)
-containerize lastLineIsText offset t =
+tryNewContainers :: Bool -> Int -> Text -> ([ContainerType], Leaf)
+tryNewContainers lastLineIsText offset t =
   case parse newContainers t of
        Right (cs,t') -> (cs, t')
        Left err      -> error (show err)
@@ -367,19 +383,6 @@ textLineOrBlank = consolidate <$> takeText
   where consolidate ts = if T.all (==' ') ts
                             then BlankLine ts
                             else TextLine ts
-
-containerStart :: Bool -> Parser ContainerType
-containerStart _lastLineIsText =
-      (BlockQuote <$ scanBlockquoteStart)
-  <|> parseListMarker
-
-verbatimContainerStart :: Bool -> Parser ContainerType
-verbatimContainerStart lastLineIsText = nfb scanBlankline *>
-   (  parseCodeFence
-  <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
-  <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$ parseHtmlBlockStart))
-  <|> (guard (not lastLineIsText) *> (Reference <$ scanReference))
-   )
 
 leaf :: Bool -> Parser Leaf
 leaf lastLineIsText = scanNonindentSpace *> (

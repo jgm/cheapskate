@@ -87,6 +87,7 @@ containerContinue c =
        Reference{}    -> nfb scanBlankline >>
                          nfb scanReference
        _              -> return ()
+{-# INLINE containerContinue #-}
 
 containerStart :: Bool -> Parser ContainerType
 containerStart _lastLineIsText =

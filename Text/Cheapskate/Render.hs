@@ -1,16 +1,20 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Text.Cheapskate.Render (renderBlocks) where
+module Text.Cheapskate.Render (render) where
 import Text.Cheapskate.Types
 import Data.Text (Text)
-import Data.Char (isDigit, isHexDigit, isAlphaNum)
-import qualified Text.Blaze.XHtml5 as H
-import qualified Text.Blaze.Html5.Attributes as A
-import qualified Text.Blaze.Html.Renderer.Text as BT
-import Text.Blaze.Html hiding(contents)
+import Text.HTML.TagSoup
 import Data.Monoid
 import Data.Foldable (foldMap, toList)
 import qualified Data.Text as T
 import Data.List (intersperse)
+import Data.Sequence (Seq, (|>), (<|), singleton)
+import qualified Data.Sequence as Seq
+
+render :: Blocks -> Text
+render = renderTagsOptions renderOptions{ optMinimize = minimize } . toList . renderBlocks
+  where minimize "br" = True
+        minimize "hr" = True
+        minimize _    = False
 
 -- Render a sequence of blocks as HTML5.  Currently a single
 -- newline is used between blocks, an a newline is used as a
@@ -21,59 +25,64 @@ renderBlocks :: Blocks -> Html
 renderBlocks = mconcat . intersperse blocksep . map renderBlock . toList
   where renderBlock :: Block -> Html
         renderBlock (Header n ils)
-          | n >= 1 && n <= 6 = ([H.h1,H.h2,H.h3,H.h4,H.h5,H.h6] !! (n - 1))
-                                  $ renderInlines ils
-          | otherwise        = H.p (renderInlines ils)
-        renderBlock (Para ils) = H.p (renderInlines ils)
-        renderBlock (HRule) = H.hr
-        renderBlock (Blockquote bs) = H.blockquote $ nl <> renderBlocks bs <> nl
+          | n >= 1 && n <= 6 =
+            inTag (T.pack $ "h" ++ show n) [] $ renderInlines ils
+          | otherwise        =
+            inTag "p" [] $ renderInlines ils
+        renderBlock (Para ils) = inTag "p" [] $ renderInlines ils
+        renderBlock (HRule) = inTag "hr" [] mempty
+        renderBlock (Blockquote bs) =
+          inTag "blockquote" [] $ nl <> renderBlocks bs <> nl
         renderBlock (CodeBlock attr t) =
-          case codeLang attr of
-                Nothing   -> base
-                Just lang -> base ! A.class_ (toValue lang)
-          where base = H.pre $ H.code $ toHtml (t <> "\n")
+          inTag "pre" attr' $ inTag "code" [] $ toHtml (t <> "\n")
           -- add newline because Markdown.pl does
+           where attr' = case codeLang attr of
+                              Nothing   -> []
+                              Just lang -> [("class", lang)]
         renderBlock (List tight (Bullet _) items) =
-          H.ul $ nl <> mapM_ (li tight) items
+          inTag "ul" [] $ nl <> mconcat (map (li tight) items)
         renderBlock (List tight (Numbered _ n) items) =
-          if n == 1 then base else base ! A.start (toValue n)
-          where base = H.ol $ nl <> mapM_ (li tight) items
-        renderBlock (HtmlBlock raw) = H.preEscapedToMarkup raw
+          inTag "ol" attr' $ nl <> mconcat (map (li tight) items)
+            where attr' = if n == 1 then [] else [("start", T.pack $ show n)]
+        renderBlock (HtmlBlock raw) = rawHtml raw
         li :: Bool -> Blocks -> Html  -- tight list handling
-        li True = (<> nl) . H.li . mconcat . intersperse blocksep .
-                      map renderBlockTight . toList
+        li True = (<> nl) .
+          (inTag "li" [] . mconcat . intersperse blocksep .
+           map renderBlockTight . toList)
         li False = toLi
         renderBlockTight (Para zs) = renderInlines zs
         renderBlockTight x         = renderBlock x
-        toLi x = (H.li $ renderBlocks x) <> nl
-        nl = "\n"
-        blocksep = "\n"
+        toLi x = inTag "li" [] (renderBlocks x) <> nl
+        nl = toHtml "\n"
+        blocksep = toHtml "\n"
 
 -- Render a sequence of inlines as HTML5.
 renderInlines :: Inlines -> Html
 renderInlines = foldMap renderInline
   where renderInline :: Inline -> Html
         renderInline (Str t) = toHtml t
-        renderInline Space   = " "
-        renderInline SoftBreak = "\n" -- this preserves the line breaks in the
-                                      -- markdown document; replace with " " if this
-                                      -- isn't wanted.
-        renderInline LineBreak = H.br <> "\n"
-        renderInline (Emph ils) = H.em $ renderInlines ils
-        renderInline (Strong ils) = H.strong $ renderInlines ils
-        renderInline (Code t) = H.code $ toHtml t
+        renderInline Space   = toHtml " "
+        renderInline SoftBreak = toHtml "\n"
+          -- this preserves the line breaks in the
+          -- markdown document; replace with " " if this isn't wanted.
+        renderInline LineBreak = inTag "br" [] mempty <> toHtml "\n"
+        renderInline (Emph ils) = inTag "em" [] $ renderInlines ils
+        renderInline (Strong ils) = inTag "strong" [] $ renderInlines ils
+        renderInline (Code t) = inTag "code" [] $ toHtml t
         renderInline (Link ils url tit) =
-          if T.null tit then base else base ! A.title (toValue' tit)
-          where base = H.a ! A.href (toValue' url) $ renderInlines ils
+          inTag "a" attr' $ renderInlines ils
+           where attr' = ("href", gentleEscape url) :
+                          [("title", gentleEscape tit) | not $ T.null tit]
         renderInline (Image ils url tit) =
-          if T.null tit then base else base ! A.title (toValue' tit)
-          where base = H.img ! A.src (toValue' url)
-                             ! A.alt (toValue $ BT.renderHtml -- TODO strip tags
-                                              $ renderInlines ils)
-        renderInline (Entity t) = H.preEscapedToMarkup t
-        renderInline (RawHtml t) = H.preEscapedToMarkup t
-        renderInline (Markdown t) = toHtml t -- shouldn't happen
+          inTag "img" ([("src", gentleEscape url),
+                        ("alt", foldMap fromTagText (renderInlines ils))] ++
+                        [("title", gentleEscape tit) | not $ T.null tit])
+           mempty
+        renderInline (Entity t) = rawHtml t
+        renderInline (RawHtml t) = rawHtml t
+        renderInline (Markdown t) = rawHtml t -- shouldn't happen
 
+{-
 toValue' :: Text -> AttributeValue
 toValue' = preEscapedToValue . gentleEscape . T.unpack
 
@@ -99,3 +108,19 @@ gentleEscape ('&':xs) =
          '&':ys ++ ";" ++ gentleEscape zs
        _ -> "&amp;" ++ gentleEscape xs
 gentleEscape (x:xs) = x : gentleEscape xs
+-}
+
+gentleEscape :: Text -> Text
+gentleEscape = foldMap fromTagText . parseTags
+
+type Html = Seq (Tag Text)
+
+inTag :: Text -> [Attribute Text] -> Html -> Html
+inTag tag attr contents =
+  (TagOpen tag attr <| contents) |> TagClose tag
+
+rawHtml :: Text -> Html
+rawHtml = Seq.fromList . parseTags
+
+toHtml :: Text -> Html
+toHtml = singleton . TagText

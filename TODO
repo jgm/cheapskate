@@ -5,3 +5,22 @@
 Note:
 - tried replacing Text with ByteString, but performance impact was
   minimal.
+- tried a tagsoup renderer - benchmark went from 0.24 to 0.3 - but
+  this will avoid a costly step of rendering Html to Text,
+  then going through xss-sanitize, which uses parseTags anyway...
+- with the tagsoup (tagsoup branch) we need to change the way
+  we parse raw html blocks, ideally using the tagsoup parser
+  itself.... but this might conflict with the line-by-line
+  strategy.  case in point:
+
+  <!--
+
+  ok
+
+  -->
+
+  This isn't a complete tag, so there's no way we can include it in
+  the tagsoup token tree without completing it, and tagsoup currently
+  renders the top line <!---->.
+
+  if we parse til the closing tag, then I suppose the problem goes away.

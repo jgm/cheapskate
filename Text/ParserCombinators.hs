@@ -33,6 +33,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Monad
 import Control.Applicative
+import qualified Data.Set as Set
 
 data Position = Position { line :: Int, column :: Int }
 
@@ -136,12 +137,22 @@ peekChar = Parser $ \st ->
                   Nothing     -> success st Nothing
 {-# INLINE peekChar #-}
 
--- not efficient as in attoparsec
+-- low-grade version of attoparsec's:
+charClass :: String -> Set.Set Char
+charClass = Set.fromList . go
+    where go (a:'-':b:xs) = [a..b] ++ go xs
+          go (x:xs) = x : go xs
+          go _ = ""
+{-# INLINE charClass #-}
+
 inClass :: String -> Char -> Bool
-inClass s c = c `elem` s
+inClass s c = c `Set.member` s'
+  where s' = charClass s
+{-# INLINE inClass #-}
 
 notInClass :: String -> Char -> Bool
 notInClass s = not . inClass s
+{-# INLINE notInClass #-}
 
 endOfInput :: Parser ()
 endOfInput = Parser $ \st ->

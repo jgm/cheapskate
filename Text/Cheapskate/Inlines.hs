@@ -191,11 +191,8 @@ pStr = do
  where isWordChar :: Char -> Bool
        -- This is a dispensable optimization over isAlphaNum, covering
        -- common cases first.
-       isWordChar c
-         | c >= 'a' && c <= 'z' = True
-         | c >= 'A' && c <= 'Z' = True
-         | c >= '0' && c <= '9' = True
-       isWordChar c = isAlphaNum c
+       isWordChar c = if isAscii c then isAsciiWordChar c else isAlphaNum c
+       isAsciiWordChar = inClass "a-zA-Z0-9"
 
 -- Catch all -- parse an escaped character, an escaped
 -- newline, or any remaining symbol character.

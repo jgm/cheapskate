@@ -32,7 +32,6 @@ library
                      Text.Cheapskate.Render
   other-modules:     Text.Cheapskate.Util
                      Text.Cheapskate.Inlines
-                     Text.Cheapskate.ContainerStack
                      Text.ParserCombinators
   build-depends:     base >=4.4 && <4.8,
                      containers >=0.4 && <0.6,

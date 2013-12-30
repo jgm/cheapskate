@@ -146,9 +146,21 @@ first non-space character after the list marker.  Thus:
 
            {code here}
 
-When the first line itself contains indented code, then subsequent
-indented code blocks should be indented five spaces past the list
-marker:
+The following diagram shows how the first line of a list item
+divides the following lines into three regions:
+
+     -   My code
+
+      +++++++
+
+Content to the left of the `+` signs will not be part of the list
+item.  Content to the right of the `+` signs will be indented code
+under the list item.  Regular blocks that belong under the
+list item should start in the region of the `+` signs.
+
+When the first line itself contains indented code, this code
+and subsequent indented code blocks should be indented five spaces past the
+list marker:
 
      -     { code }
 

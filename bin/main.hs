@@ -21,6 +21,7 @@ convert opts = render . parseMarkdown
                           renderHtmlToByteStringIO B.putStr
                              $ renderBlocks def{ sanitize = "--sanitize" `elem` opts
                                                , allowRawHtml = "--escape-raw-html" `notElem` opts
+                                               , preserveHardBreaks = "--hard-breaks" `elem` opts
                                                } x <> toHtml "\n"
 
 -- main loop

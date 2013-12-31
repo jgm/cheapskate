@@ -30,6 +30,7 @@ As a library:
     html :: Html
     html = renderBlocks def{ sanitize = True
                            , allowRawHtml = True
+                           , preserveHardBreaks = False
                            } $ parseMarkdown "Hello *world*"
 
 If the markdown input you are converting comes from an untrusted source

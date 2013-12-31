@@ -24,7 +24,7 @@ As an executable:
 As a library:
 
     {-# LANGUAGE OverloadedStrings #-}
-    import Text.Cheapskate
+    import Cheapskate
     import Text.Blaze.Html
 
     html :: Html

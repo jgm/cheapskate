@@ -1,7 +1,7 @@
 SHELL = /bin/bash
 PROG ?= dist/build/cheapskate/cheapskate
 BENCHPROGS ?= "pandoc -fmarkdown_strict+autolink_bare_uris+fenced_code_blocks+intraword_underscores"
-SOURCES=bin/cheapskate.hs Text/Cheapskate.hs Text/Cheapskate/Parse.hs Text/Cheapskate/Types.hs Text/Cheapskate/Inlines.hs Text/Cheapskate/Util.hs Text/Cheapskate/Render.hs Text/ParserCombinators.hs
+SOURCES=bin/main.hs Cheapskate.hs Cheapskate/Parse.hs Cheapskate/Types.hs Cheapskate/Inlines.hs Cheapskate/Util.hs Cheapskate/Render.hs Cheapskate/ParserCombinators.hs
 
 .PHONY: prof test bench linecount clean fuzztest
 

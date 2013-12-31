@@ -1,6 +1,6 @@
 module Main where
 
-import Text.Cheapskate
+import Cheapskate
 import Text.Blaze.Html.Renderer.Utf8 (renderHtmlToByteStringIO)
 import Text.Blaze.Html
 import Data.Monoid ((<>))
@@ -11,7 +11,7 @@ import qualified Data.ByteString as B
 import qualified Data.Text.IO as T
 import qualified Data.Text as T
 
-import Text.Cheapskate.Parse (processLines) -- TODO for now
+import Cheapskate.Parse (processLines) -- TODO for now
 
 convert :: [String] -> Text -> IO ()
 convert opts = render . parseMarkdown

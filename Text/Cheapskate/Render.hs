@@ -15,11 +15,15 @@ import Text.HTML.SanitizeXSS (sanitizeBalance, sanitizeAttribute)
 import Data.Default
 
 data RenderOptions = RenderOptions{
-  sanitize    :: Bool
+    sanitize     :: Bool
+  , allowRawHtml :: Bool
   }
 
 instance Default RenderOptions where
-  def = RenderOptions{ sanitize = True }
+  def = RenderOptions{
+          sanitize = True
+        , allowRawHtml = True
+        }
 
 -- Render a sequence of blocks as HTML5.  Currently a single
 -- newline is used between blocks, and a newline is used as a
@@ -47,8 +51,13 @@ renderBlocks opts = mconcat . intersperse blocksep . map renderBlock . toList
         renderBlock (List tight (Numbered _ n) items) =
           if n == 1 then base else base ! A.start (toValue n)
           where base = H.ol $ nl <> mapM_ (li tight) items
-        renderBlock (HtmlBlock raw) = H.preEscapedToMarkup $
-          if sanitize opts then sanitizeBalance raw else raw
+        renderBlock (HtmlBlock raw) =
+          if allowRawHtml opts
+             then H.preEscapedToMarkup $
+                  if sanitize opts
+                     then sanitizeBalance raw
+                     else raw
+             else toHtml raw
         li :: Bool -> Blocks -> Html  -- tight list handling
         li True = (<> nl) . H.li . mconcat . intersperse blocksep .
                       map renderBlockTight . toList
@@ -81,8 +90,13 @@ renderInlines opts = foldMap renderInline
                              ! A.alt (toValue
                                 $ BT.renderHtml $ renderInlines opts ils)
         renderInline (Entity t) = H.preEscapedToMarkup t
-        renderInline (RawHtml t) = H.preEscapedToMarkup $
-          if sanitize opts then sanitizeBalance t else t
+        renderInline (RawHtml t) =
+          if allowRawHtml opts
+             then H.preEscapedToMarkup $
+                  if sanitize opts
+                     then sanitizeBalance t
+                     else t
+             else toHtml t
         renderInline (Markdown t) = toHtml t -- shouldn't happen
 
 toValue' :: RenderOptions -> Text -> Text -> AttributeValue

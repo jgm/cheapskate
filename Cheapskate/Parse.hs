@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Cheapskate.Parse (
-         parseMarkdown
+         markdown
        , processLines {- TODO for now -}
        ) where
 import Cheapskate.ParserCombinators
@@ -22,11 +22,12 @@ import Control.Applicative
 import qualified Data.Map as M
 import Data.List (intercalate)
 
--- import Debug.Trace
--- tr' s x = trace (s ++ ": " ++ show x) x
+import Debug.Trace
 
-parseMarkdown :: Text -> Blocks
-parseMarkdown = processDocument . processLines
+markdown :: Options -> Text -> Doc
+markdown opts
+  | debug opts = (\x -> trace (show x) $ Doc opts mempty) . processLines
+  | otherwise  = Doc opts . processDocument . processLines
 
 -- container stack:
 

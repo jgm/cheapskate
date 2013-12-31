@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cheapskate.Render (renderBlocks) where
+module Cheapskate.Render (renderDoc, renderBlocks, renderInlines) where
 import Cheapskate.Types
 import Data.Text (Text)
 import Data.Char (isDigit, isHexDigit, isAlphaNum)
@@ -10,15 +10,30 @@ import Text.Blaze.Html hiding(contents)
 import Data.Monoid
 import Data.Foldable (foldMap, toList)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import Data.List (intersperse)
-import Text.HTML.SanitizeXSS (sanitizeBalance, sanitizeAttribute)
+import Text.HTML.SanitizeXSS (sanitizeBalance)
+
+instance ToMarkup Doc where
+  toMarkup = renderDoc
+
+renderDoc :: Doc -> Html
+renderDoc (Doc opts body) = mbsanitize $ (renderBlocks opts body <> "\n")
+  where mbsanitize = if sanitize opts
+                        then preEscapedToMarkup . sanitizeBalance .
+                             TL.toStrict . BT.renderHtml
+                        else id
+  -- note: less efficient to do this at the whole document level,
+  -- rather than on individual raw html bits and attributes, but
+  -- this is needed for cases where open tags in one raw HTML
+  -- section are balanced by close tags in another.
 
 -- Render a sequence of blocks as HTML5.  Currently a single
 -- newline is used between blocks, and a newline is used as a
 -- separator e.g. for list items. These can be changed by adjusting
 -- nl and blocksep.  Eventually we probably want these as parameters
 -- or options.
-renderBlocks :: RenderOptions -> Blocks -> Html
+renderBlocks :: Options -> Blocks -> Html
 renderBlocks opts = mconcat . intersperse blocksep . map renderBlock . toList
   where renderBlock :: Block -> Html
         renderBlock (Header n ils)
@@ -31,7 +46,7 @@ renderBlocks opts = mconcat . intersperse blocksep . map renderBlock . toList
         renderBlock (CodeBlock attr t) =
           case codeLang attr of
                 Nothing   -> base
-                Just lang -> base ! A.class_ (toValue' opts "class" lang)
+                Just lang -> base ! A.class_ (toValue' lang)
           where base = H.pre $ H.code $ toHtml (t <> "\n")
           -- add newline because Markdown.pl does
         renderBlock (List tight (Bullet _) items) =
@@ -41,10 +56,7 @@ renderBlocks opts = mconcat . intersperse blocksep . map renderBlock . toList
           where base = H.ol $ nl <> mapM_ (li tight) items
         renderBlock (HtmlBlock raw) =
           if allowRawHtml opts
-             then H.preEscapedToMarkup $
-                  if sanitize opts
-                     then sanitizeBalance raw
-                     else raw
+             then H.preEscapedToMarkup raw
              else toHtml raw
         li :: Bool -> Blocks -> Html  -- tight list handling
         li True = (<> nl) . H.li . mconcat . intersperse blocksep .
@@ -57,7 +69,7 @@ renderBlocks opts = mconcat . intersperse blocksep . map renderBlock . toList
         blocksep = "\n"
 
 -- Render a sequence of inlines as HTML5.
-renderInlines :: RenderOptions -> Inlines -> Html
+renderInlines :: Options -> Inlines -> Html
 renderInlines opts = foldMap renderInline
   where renderInline :: Inline -> Html
         renderInline (Str t) = toHtml t
@@ -72,29 +84,22 @@ renderInlines opts = foldMap renderInline
         renderInline (Strong ils) = H.strong $ renderInlines opts ils
         renderInline (Code t) = H.code $ toHtml t
         renderInline (Link ils url tit) =
-          if T.null tit then base else base ! A.title (toValue' opts "title" tit)
-          where base = H.a ! A.href (toValue' opts "href" url) $ renderInlines opts ils
+          if T.null tit then base else base ! A.title (toValue' tit)
+          where base = H.a ! A.href (toValue' url) $ renderInlines opts ils
         renderInline (Image ils url tit) =
-          if T.null tit then base else base ! A.title (toValue' opts "title" tit)
-          where base = H.img ! A.src (toValue' opts "src" url)
+          if T.null tit then base else base ! A.title (toValue' tit)
+          where base = H.img ! A.src (toValue' url)
                              ! A.alt (toValue
                                 $ BT.renderHtml $ renderInlines opts ils)
         renderInline (Entity t) = H.preEscapedToMarkup t
         renderInline (RawHtml t) =
           if allowRawHtml opts
-             then H.preEscapedToMarkup $
-                  if sanitize opts
-                     then sanitizeBalance t
-                     else t
+             then H.preEscapedToMarkup t
              else toHtml t
         renderInline (Markdown t) = toHtml t -- shouldn't happen
 
-toValue' :: RenderOptions -> Text -> Text -> AttributeValue
-toValue' opts attr t =
-  preEscapedToValue . gentleEscape . T.unpack $
-  if sanitize opts
-     then maybe "" snd $ sanitizeAttribute (attr, t)
-     else t
+toValue' :: Text -> AttributeValue
+toValue' = preEscapedToValue . gentleEscape . T.unpack
 
 -- preserve existing entities
 gentleEscape :: String -> String

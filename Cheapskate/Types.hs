@@ -6,6 +6,9 @@ import qualified Data.Map as M
 
 -- Structured representation of a document.
 
+data Doc = Doc Options Blocks
+           deriving Show
+
 -- Block-level elements.
 data Block = Para Inlines
            | Header Int Inlines
@@ -51,16 +54,19 @@ type Inlines = Seq Inline
 
 type ReferenceMap = M.Map Text (Text, Text)
 
-data RenderOptions = RenderOptions{
+data Options = Options{
     sanitize           :: Bool  -- sanitize raw HTML, link/image attributes
   , allowRawHtml       :: Bool  -- allow raw HTML (if false it gets escaped)
   , preserveHardBreaks :: Bool  -- preserve hard line breaks in the source
+  , debug              :: Bool  -- print container structure
   }
+  deriving Show
 
-instance Default RenderOptions where
-  def = RenderOptions{
+instance Default Options where
+  def = Options{
           sanitize = True
         , allowRawHtml = True
         , preserveHardBreaks = False
+        , debug = False
         }
 

@@ -1,11 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Cheapskate (parseMarkdown,
-                   renderBlocks,
-                   RenderOptions(..),
+module Cheapskate (markdown,
                    def,
-                   module Cheapskate.Types) where
+                   module Cheapskate.Types,
+                   ) where
 import Cheapskate.Types
 import Cheapskate.Parse
-import Cheapskate.Render
+import Cheapskate.Render ()
 import Data.Default (def)

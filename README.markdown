@@ -28,10 +28,11 @@ As a library:
     import Text.Blaze.Html
 
     html :: Html
-    html = renderBlocks def{ sanitize = True
+    html = toHtml $ markdown def{
+                             sanitize = True
                            , allowRawHtml = True
                            , preserveHardBreaks = False
-                           } $ parseMarkdown "Hello *world*"
+                           } "Hello *world*"
 
 If the markdown input you are converting comes from an untrusted source
 (e.g. a web form), you should *always* set `sanitize` to `True`.  This causes

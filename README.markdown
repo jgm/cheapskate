@@ -28,14 +28,23 @@ As a library:
     import Text.Blaze.Html
 
     html :: Html
-    html = renderBlocks $ parseMarkdown "Hello *world*"
+    html = renderBlocks def{ sanitize = True
+                           , allowRawHtml = True
+                           } $ parseMarkdown "Hello *world*"
 
-**Important note on security:** If the markdown input you are converting comes
-from an untrusted source (e.g. a web form), you should *always*
-sanitize the output using a library like `xss-sanitize` before displaying
-it on a web page.  It is *not* sufficient to sanitize only the raw HTML
-on the markdown page, as some libraries do, because this does not protect
-against possible XSS attacks via link and image attributes.
+If the markdown input you are converting comes from an untrusted source
+(e.g. a web form), you should *always* set `sanitize` to `True`.  This causes
+all raw HTML to be filtered through `xss-sanitize`'s `sanitizeBalance` function,
+and all markdown attributes (e.g. URLs and titles in links and images) to
+be filtered through `sanitizeAttribute`.  Otherwise you risk a XSS attack from
+raw HTML or a markdown link or image attribute attribute.  Note that
+`sanitizeBalance` will close unmatched tags, so it will not be possible
+to surround a markdown section with opening and closing `<div>` tags.
+
+You may also wish to disallow users from entering raw HTML for aesthetic,
+rather than security reasons.  In that case, set `allowRawHtml` to `True`,
+but let `sanitize` stay `True`, since it still affects attributes coming
+from markdown links and images.
 
 ## Extensions
 

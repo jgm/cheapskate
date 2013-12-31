@@ -19,7 +19,7 @@ convert opts = render . parseMarkdown
                         then print x
                         else do
                           renderHtmlToByteStringIO B.putStr
-                             $ renderBlocks def x <> toHtml "\n"
+                             $ renderBlocks def{ sanitize = "--sanitize" `elem` opts } x <> toHtml "\n"
 
 -- main loop
 

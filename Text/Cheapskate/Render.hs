@@ -39,7 +39,7 @@ renderBlocks opts = mconcat . intersperse blocksep . map renderBlock . toList
         renderBlock (CodeBlock attr t) =
           case codeLang attr of
                 Nothing   -> base
-                Just lang -> base ! A.class_ (toValue lang)
+                Just lang -> base ! A.class_ (toValue' opts "class" lang)
           where base = H.pre $ H.code $ toHtml (t <> "\n")
           -- add newline because Markdown.pl does
         renderBlock (List tight (Bullet _) items) =
@@ -47,7 +47,8 @@ renderBlocks opts = mconcat . intersperse blocksep . map renderBlock . toList
         renderBlock (List tight (Numbered _ n) items) =
           if n == 1 then base else base ! A.start (toValue n)
           where base = H.ol $ nl <> mapM_ (li tight) items
-        renderBlock (HtmlBlock raw) = H.preEscapedToMarkup raw
+        renderBlock (HtmlBlock raw) = H.preEscapedToMarkup $
+          if sanitize opts then sanitizeBalance raw else raw
         li :: Bool -> Blocks -> Html  -- tight list handling
         li True = (<> nl) . H.li . mconcat . intersperse blocksep .
                       map renderBlockTight . toList
@@ -72,19 +73,24 @@ renderInlines opts = foldMap renderInline
         renderInline (Strong ils) = H.strong $ renderInlines opts ils
         renderInline (Code t) = H.code $ toHtml t
         renderInline (Link ils url tit) =
-          if T.null tit then base else base ! A.title (toValue' tit)
-          where base = H.a ! A.href (toValue' url) $ renderInlines opts ils
+          if T.null tit then base else base ! A.title (toValue' opts "title" tit)
+          where base = H.a ! A.href (toValue' opts "href" url) $ renderInlines opts ils
         renderInline (Image ils url tit) =
-          if T.null tit then base else base ! A.title (toValue' tit)
-          where base = H.img ! A.src (toValue' url)
-                             ! A.alt (toValue $ BT.renderHtml -- TODO strip tags
-                                              $ renderInlines opts ils)
+          if T.null tit then base else base ! A.title (toValue' opts "title" tit)
+          where base = H.img ! A.src (toValue' opts "src" url)
+                             ! A.alt (toValue
+                                $ BT.renderHtml $ renderInlines opts ils)
         renderInline (Entity t) = H.preEscapedToMarkup t
-        renderInline (RawHtml t) = H.preEscapedToMarkup t
+        renderInline (RawHtml t) = H.preEscapedToMarkup $
+          if sanitize opts then sanitizeBalance t else t
         renderInline (Markdown t) = toHtml t -- shouldn't happen
 
-toValue' :: Text -> AttributeValue
-toValue' = preEscapedToValue . gentleEscape . T.unpack
+toValue' :: RenderOptions -> Text -> Text -> AttributeValue
+toValue' opts attr t =
+  preEscapedToValue . gentleEscape . T.unpack $
+  if sanitize opts
+     then maybe "" snd $ sanitizeAttribute (attr, t)
+     else t
 
 -- preserve existing entities
 gentleEscape :: String -> String

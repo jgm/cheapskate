@@ -19,7 +19,7 @@ convert opts = render . parseMarkdown
                         then print x
                         else do
                           renderHtmlToByteStringIO B.putStr
-                             $ renderBlocks x <> toHtml "\n"
+                             $ renderBlocks def x <> toHtml "\n"
 
 -- main loop
 

@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Text.Cheapskate.Render (renderBlocks) where
+module Text.Cheapskate.Render (renderBlocks, RenderOptions(..), def) where
 import Text.Cheapskate.Types
 import Data.Text (Text)
 import Data.Char (isDigit, isHexDigit, isAlphaNum)
@@ -11,22 +11,31 @@ import Data.Monoid
 import Data.Foldable (foldMap, toList)
 import qualified Data.Text as T
 import Data.List (intersperse)
+import Text.HTML.SanitizeXSS (sanitizeBalance, sanitizeAttribute)
+import Data.Default
+
+data RenderOptions = RenderOptions{
+  sanitize    :: Bool
+  }
+
+instance Default RenderOptions where
+  def = RenderOptions{ sanitize = True }
 
 -- Render a sequence of blocks as HTML5.  Currently a single
--- newline is used between blocks, an a newline is used as a
+-- newline is used between blocks, and a newline is used as a
 -- separator e.g. for list items. These can be changed by adjusting
 -- nl and blocksep.  Eventually we probably want these as parameters
 -- or options.
-renderBlocks :: Blocks -> Html
-renderBlocks = mconcat . intersperse blocksep . map renderBlock . toList
+renderBlocks :: RenderOptions -> Blocks -> Html
+renderBlocks opts = mconcat . intersperse blocksep . map renderBlock . toList
   where renderBlock :: Block -> Html
         renderBlock (Header n ils)
           | n >= 1 && n <= 6 = ([H.h1,H.h2,H.h3,H.h4,H.h5,H.h6] !! (n - 1))
-                                  $ renderInlines ils
-          | otherwise        = H.p (renderInlines ils)
-        renderBlock (Para ils) = H.p (renderInlines ils)
+                                  $ renderInlines opts ils
+          | otherwise        = H.p (renderInlines opts ils)
+        renderBlock (Para ils) = H.p (renderInlines opts ils)
         renderBlock (HRule) = H.hr
-        renderBlock (Blockquote bs) = H.blockquote $ nl <> renderBlocks bs <> nl
+        renderBlock (Blockquote bs) = H.blockquote $ nl <> renderBlocks opts bs <> nl
         renderBlock (CodeBlock attr t) =
           case codeLang attr of
                 Nothing   -> base
@@ -43,15 +52,15 @@ renderBlocks = mconcat . intersperse blocksep . map renderBlock . toList
         li True = (<> nl) . H.li . mconcat . intersperse blocksep .
                       map renderBlockTight . toList
         li False = toLi
-        renderBlockTight (Para zs) = renderInlines zs
+        renderBlockTight (Para zs) = renderInlines opts zs
         renderBlockTight x         = renderBlock x
-        toLi x = (H.li $ renderBlocks x) <> nl
+        toLi x = (H.li $ renderBlocks opts x) <> nl
         nl = "\n"
         blocksep = "\n"
 
 -- Render a sequence of inlines as HTML5.
-renderInlines :: Inlines -> Html
-renderInlines = foldMap renderInline
+renderInlines :: RenderOptions -> Inlines -> Html
+renderInlines opts = foldMap renderInline
   where renderInline :: Inline -> Html
         renderInline (Str t) = toHtml t
         renderInline Space   = " "
@@ -59,17 +68,17 @@ renderInlines = foldMap renderInline
                                       -- markdown document; replace with " " if this
                                       -- isn't wanted.
         renderInline LineBreak = H.br <> "\n"
-        renderInline (Emph ils) = H.em $ renderInlines ils
-        renderInline (Strong ils) = H.strong $ renderInlines ils
+        renderInline (Emph ils) = H.em $ renderInlines opts ils
+        renderInline (Strong ils) = H.strong $ renderInlines opts ils
         renderInline (Code t) = H.code $ toHtml t
         renderInline (Link ils url tit) =
           if T.null tit then base else base ! A.title (toValue' tit)
-          where base = H.a ! A.href (toValue' url) $ renderInlines ils
+          where base = H.a ! A.href (toValue' url) $ renderInlines opts ils
         renderInline (Image ils url tit) =
           if T.null tit then base else base ! A.title (toValue' tit)
           where base = H.img ! A.src (toValue' url)
                              ! A.alt (toValue $ BT.renderHtml -- TODO strip tags
-                                              $ renderInlines ils)
+                                              $ renderInlines opts ils)
         renderInline (Entity t) = H.preEscapedToMarkup t
         renderInline (RawHtml t) = H.preEscapedToMarkup t
         renderInline (Markdown t) = toHtml t -- shouldn't happen

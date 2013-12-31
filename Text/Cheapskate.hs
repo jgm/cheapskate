@@ -2,6 +2,8 @@
 
 module Text.Cheapskate (parseMarkdown,
                         renderBlocks,
+                        RenderOptions(..),
+                        def,
                         module Text.Cheapskate.Types) where
 import Text.Cheapskate.Types
 import Text.Cheapskate.Parse

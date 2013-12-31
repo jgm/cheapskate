@@ -1,0 +1,31 @@
+# Markdown libraries on Hackage - some notes
+
+Compare:
+
+- licenses
+- code size
+- speed
+- security/robustness
+- API
+- accuracy
+- extensions
+- popularity
+
+## pandoc
+
+
+## markdown
+
+
+## discount
+
+
+## hdiscount
+
+
+## sundown
+
+
+## cheapskate
+
+

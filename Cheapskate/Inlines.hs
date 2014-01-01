@@ -148,7 +148,7 @@ parseInlines refmap t =
 pInline :: ReferenceMap -> Parser Inlines
 pInline refmap =
            pSpace
-       <|> pStr
+       <|> pAsciiStr
        <|> pEnclosure '*' refmap  -- strong/emph
        <|> (notAfter isAlphaNum *> pEnclosure '_' refmap)
        <|> pLink refmap
@@ -172,6 +172,16 @@ pSpace = do
                    then LineBreak
                    else SoftBreak
               else Space
+
+pAsciiStr :: Parser Inlines
+pAsciiStr = do
+  t <- takeWhile1 (inClass "a-zA-Z0-9")
+  mbc <- peekChar
+  case mbc of
+       Just ':' -> if t `Set.member` schemeSet
+                      then pUri t
+                      else return $ singleton $ Str t
+       _        -> return $ singleton $ Str t
 
 -- Parse a string.  We include internal underscores,
 -- so they won't trigger emphasis.

@@ -86,6 +86,11 @@ Underscores cannot be used for word-internal emphasis. This
 prevents common mistakes with filenames, usernames, and indentifiers.
 Asterisks can still be used if word in*ter*nal emphasis is needed.
 
+The exact rule is this:  an underscore that appears directly after
+an alphanumeric character does not begin an emphasized span.  (However,
+an underscore directly before an alphanumeric can end an emphasized
+span.)
+
 ### Ordered lists
 
 The starting number of an ordered list is now significant.

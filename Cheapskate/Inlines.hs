@@ -86,7 +86,7 @@ pLinkUrl = do
      then T.pack <$> manyTill
            (pSatisfy (\c -> c /='\r' && c /='\n')) (char '>')
      else T.concat <$> many (regChunk <|> parenChunk)
-    where regChunk = takeWhile1 (notInClass " \t\n\r()\\") <|> pEscaped
+    where regChunk = takeWhile1 (notInClass " \n()\\") <|> pEscaped
           parenChunk = parenthesize . T.concat <$> (char '(' *>
                          manyTill (regChunk <|> parenChunk) (char ')'))
           parenthesize x = "(" <> x <> ")"
@@ -172,9 +172,15 @@ pSpace = do
                    else SoftBreak
               else Space
 
+isAsciiAlphaNum :: Char -> Bool
+isAsciiAlphaNum c =
+  (c >= 'a' && c <= 'z') ||
+  (c >= 'A' && c <= 'Z') ||
+  (c >= '0' && c <= '9')
+
 pAsciiStr :: Parser Inlines
 pAsciiStr = do
-  t <- takeWhile1 (inClass "a-zA-Z0-9")
+  t <- takeWhile1 isAsciiAlphaNum
   mbc <- peekChar
   case mbc of
        Just ':' -> if t `Set.member` schemeSet

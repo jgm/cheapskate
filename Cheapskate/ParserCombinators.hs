@@ -4,6 +4,7 @@ module Cheapskate.ParserCombinators (
   , parse
   , satisfy
   , peekChar
+  , peekLastChar
   , inClass
   , notInClass
   , endOfInput
@@ -42,8 +43,9 @@ instance Show Position where
 
 data ParseError = ParseError Position String deriving Show
 
-data ParserState = ParserState { subject :: Text
+data ParserState = ParserState { subject  :: Text
                                , position :: Position
+                               , lastChar :: Maybe Char
                                }
 
 advance :: ParserState -> Text -> ParserState
@@ -58,7 +60,8 @@ advance = T.foldl' go
                                                   line (position st)
                                                   , column =
                                                   column (position st) + 1
-                                                  } }
+                                                  }
+                    , lastChar = Just c }
 
 newtype Parser a = Parser {
   evalParser :: ParserState -> Either ParseError (ParserState, a)
@@ -112,7 +115,9 @@ instance MonadPlus Parser where
 
 parse :: Parser a -> Text -> Either ParseError a
 parse p t =
-  fmap snd $ evalParser p ParserState{ subject = t, position = Position 1 1 }
+  fmap snd $ evalParser p ParserState{ subject  = t
+                                     , position = Position 1 1
+                                     , lastChar = Nothing }
 
 failure :: ParserState -> String -> Either ParseError (ParserState, a)
 failure st msg = Left $ ParseError (position st) msg
@@ -136,6 +141,10 @@ peekChar = Parser $ \st ->
                   Just (c, _) -> success st (Just c)
                   Nothing     -> success st Nothing
 {-# INLINE peekChar #-}
+
+peekLastChar :: Parser (Maybe Char)
+peekLastChar = Parser $ \st -> success st (lastChar st)
+{-# INLINE peekLastChar #-}
 
 -- low-grade version of attoparsec's:
 charClass :: String -> Set.Set Char

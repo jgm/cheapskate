@@ -150,7 +150,7 @@ pInline refmap =
            pSpace
        <|> pStr
        <|> pEnclosure '*' refmap  -- strong/emph
-       <|> pEnclosure '_' refmap
+       <|> (notAfter isAlphaNum *> pEnclosure '_' refmap)
        <|> pLink refmap
        <|> pImage refmap
        <|> pCode

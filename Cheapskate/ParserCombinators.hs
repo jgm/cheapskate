@@ -5,6 +5,7 @@ module Cheapskate.ParserCombinators (
   , satisfy
   , peekChar
   , peekLastChar
+  , notAfter
   , inClass
   , notInClass
   , endOfInput
@@ -145,6 +146,13 @@ peekChar = Parser $ \st ->
 peekLastChar :: Parser (Maybe Char)
 peekLastChar = Parser $ \st -> success st (lastChar st)
 {-# INLINE peekLastChar #-}
+
+notAfter :: (Char -> Bool) -> Parser ()
+notAfter f = do
+  mbc <- peekLastChar
+  case mbc of
+       Nothing -> return ()
+       Just c  -> if f c then mzero else return ()
 
 -- low-grade version of attoparsec's:
 charClass :: String -> Set.Set Char

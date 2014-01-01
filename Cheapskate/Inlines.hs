@@ -10,8 +10,7 @@ import Cheapskate.Util
 import Cheapskate.Types
 import Data.Char hiding (Space)
 import qualified Data.Sequence as Seq
-import Data.Sequence (singleton, (<|), viewr, ViewR(..))
-import Data.List (intersperse)
+import Data.Sequence (singleton, (<|))
 import Prelude hiding (takeWhile)
 import Control.Applicative
 import Data.Monoid
@@ -182,27 +181,6 @@ pAsciiStr = do
                       then pUri t
                       else return $ singleton $ Str t
        _        -> return $ singleton $ Str t
-
--- Parse a string.  We include internal underscores,
--- so they won't trigger emphasis.
-pStr :: Parser Inlines
-pStr = do
-  x  <- takeWhile1 isWordChar
-  xs <- many $ (T.append <$> takeWhile (== '_') <*> takeWhile1 isWordChar)
-          <|>  (T.append <$> takeWhile (== ' ') <*> takeWhile1 isWordChar)
-  let sq = Seq.fromList . intersperse Space . map Str . T.words . T.concat
-           $ (x:xs)
-  case viewr sq of
-       (rest :> Str ys)
-         | T.all (\c -> isAscii c && isAlphaNum c) ys &&
-           ys `Set.member` schemeSet ->
-             ((rest `mappend`) <$> pUri ys) <|> return sq
-       _ -> return sq
- where isWordChar :: Char -> Bool
-       -- This is a dispensable optimization over isAlphaNum, covering
-       -- common cases first.
-       isWordChar c = if isAscii c then isAsciiWordChar c else isAlphaNum c
-       isAsciiWordChar = inClass "a-zA-Z0-9"
 
 -- Catch all -- parse an escaped character, an escaped
 -- newline, or any remaining symbol character.

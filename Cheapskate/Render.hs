@@ -14,9 +14,6 @@ import qualified Data.Text.Lazy as TL
 import Data.List (intersperse)
 import Text.HTML.SanitizeXSS (sanitizeBalance)
 
-instance ToMarkup Doc where
-  toMarkup = renderDoc
-
 renderDoc :: Doc -> Html
 renderDoc (Doc opts body) = mbsanitize $ (renderBlocks opts body <> "\n")
   where mbsanitize = if sanitize opts
@@ -96,7 +93,6 @@ renderInlines opts = foldMap renderInline
           if allowRawHtml opts
              then H.preEscapedToMarkup t
              else toHtml t
-        renderInline (Markdown t) = toHtml t -- shouldn't happen
 
 toValue' :: Text -> AttributeValue
 toValue' = preEscapedToValue . gentleEscape . T.unpack

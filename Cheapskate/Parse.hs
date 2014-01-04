@@ -23,7 +23,12 @@ import Data.List (intercalate)
 
 import Debug.Trace
 
--- | Parses the input as a markdown document.
+-- | Parses the input as a markdown document.  Note that 'Doc' is an instance
+-- of 'ToMarkup', so the document can be converted to 'Html' using 'toHtml'.
+-- A simple 'Text' to 'Html' filter would be
+--
+-- > markdownToHtml :: Text -> Html
+-- > markdownToHtml = toHtml . markdown def
 markdown :: Options -> Text -> Doc
 markdown opts
   | debug opts = (\x -> trace (show x) $ Doc opts mempty) . processLines

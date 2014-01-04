@@ -69,7 +69,7 @@ main = T.getContents >>=
   TL.putStr . renderHtml . toHtml . walk addHighlighting . markdown def
 
 addHighlighting :: Block -> Block
-addHighlighting (CodeBlock (CodeAttr (Just lang)) t) =
+addHighlighting (CodeBlock (CodeAttr lang _) t) =
   HtmlBlock (T.concat $ TL.toChunks
              $ renderHtml $ toHtml
              $ formatHtmlBlock defaultFormatOpts

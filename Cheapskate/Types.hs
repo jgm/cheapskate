@@ -21,10 +21,9 @@ data Block = Para Inlines
            | HRule
            deriving (Show, Data, Typeable)
 
--- | Attributes for fenced code blocks.  More structure
--- can be added later, or perhaps a catch-all to contain
--- the remainder of the line after the language.
-data CodeAttr = CodeAttr { codeLang :: Maybe Text }
+-- | Attributes for fenced code blocks.  'codeLang' is the
+-- first word of the attribute line, 'codeInfo' is the rest.
+data CodeAttr = CodeAttr { codeLang :: Text, codeInfo :: Text }
               deriving (Show, Data, Typeable)
 
 data ListType = Bullet Char | Numbered NumWrapper Int deriving (Eq,Show,Data,Typeable)

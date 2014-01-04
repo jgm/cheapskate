@@ -247,10 +247,10 @@ processElts refmap (C (Container ct cs) : rest) =
                                processElts refmap rest
                   where txt = joinLines $ map extractText $ toList cs
                         attr = case T.words info' of
-                                  []    -> CodeAttr Nothing
-                                  (w:_) -> CodeAttr (Just w)
+                                  []     -> CodeAttr "" ""
+                                  (w:ws) -> CodeAttr w (T.unwords ws)
 
-    IndentedCode -> singleton (CodeBlock (CodeAttr Nothing) txt)
+    IndentedCode -> singleton (CodeBlock (CodeAttr "" "") txt)
                     <> processElts refmap rest'
                   where txt = joinLines $ stripTrailingEmpties
                               $ concatMap extractCode cbs

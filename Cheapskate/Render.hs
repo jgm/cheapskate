@@ -44,9 +44,9 @@ renderBlocks opts = mconcat . intersperse blocksep . map renderBlock . toList
         renderBlock (HRule) = H.hr
         renderBlock (Blockquote bs) = H.blockquote $ nl <> renderBlocks opts bs <> nl
         renderBlock (CodeBlock attr t) =
-          case codeLang attr of
-                Nothing   -> base
-                Just lang -> base ! A.class_ (toValue' lang)
+          if T.null (codeLang attr)
+             then base
+             else base ! A.class_ (toValue' $ codeLang attr)
           where base = H.pre $ H.code $ toHtml (t <> "\n")
           -- add newline because Markdown.pl does
         renderBlock (List tight (Bullet _) items) =

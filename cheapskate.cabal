@@ -21,6 +21,9 @@ category:            Text
 build-type:          Simple
 extra-source-files:  README.markdown
 cabal-version:       >=1.10
+Source-repository head
+  type:              git
+  location:          git://github.com/jgm/cheapskate.git
 
 library
   hs-source-dirs:    .
@@ -41,7 +44,7 @@ library
                      syb,
                      uniplate >= 1.6 && < 1.7
   default-language:  Haskell2010
-  ghc-options:       -O -Wall -fno-warn-unused-do-bind
+  ghc-options:       -Wall -fno-warn-unused-do-bind
   ghc-prof-options:  -auto-all -caf-all -rtsopts
 
 executable cheapskate
@@ -54,5 +57,5 @@ executable cheapskate
                      blaze-html >=0.6 && <0.7,
                      text >= 0.9 && <1.1
   default-language:  Haskell2010
-  ghc-options:       -O -Wall -fno-warn-unused-do-bind
+  ghc-options:       -Wall -fno-warn-unused-do-bind
   ghc-prof-options:  -auto-all -caf-all -rtsopts

@@ -14,6 +14,9 @@ import qualified Data.Text.Lazy as TL
 import Data.List (intersperse)
 import Text.HTML.SanitizeXSS (sanitizeBalance)
 
+-- | Render a markdown document as 'Html'.  (This can be turned
+-- into a 'Text' or 'ByteString' using a renderer from the @blaze-html@
+-- library.)
 renderDoc :: Doc -> Html
 renderDoc (Doc opts body) = mbsanitize $ (renderBlocks opts body <> "\n")
   where mbsanitize = if sanitize opts

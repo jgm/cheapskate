@@ -1,13 +1,11 @@
 name:                cheapskate
 version:             0.1.0.0
 synopsis:            Experimental markdown processor.
-description:         This is an experimental markdown parser in Haskell.
-                     It is seven times faster than pandoc (about the same
-                     as the C library peg-markdown) and uses a fifth of the
-                     memory. It is also more forgiving. It allows blockquotes,
-                     headers, indented code blocks, horizontal rules, and
-                     lists to start without a preceding blank line, and it
-                     is more flexible about the indentation of sublists.
+description:         This is an experimental Markdown processor in pure
+                     Haskell.  (A cheapskate is always in search of the best markdown.)
+                     It aims to process Markdown efficiently and in the most forgiving
+                     possible way.  It is designed for robustness and should handle even
+                     garbage input.
                      .
                      Several markdown extensions are implemented, including
                      fenced code blocks and significant list start numbers.

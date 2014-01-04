@@ -23,6 +23,7 @@ import Data.List (intercalate)
 
 import Debug.Trace
 
+-- | Parses the input as a markdown document.
 markdown :: Options -> Text -> Doc
 markdown opts
   | debug opts = (\x -> trace (show x) $ Doc opts mempty) . processLines

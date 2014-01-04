@@ -27,7 +27,7 @@ library
   exposed-modules:   Cheapskate
                      Cheapskate.Parse
                      Cheapskate.Types
-                     Cheapskate.Render
+                     Cheapskate.Html
   other-modules:     Cheapskate.Util
                      Cheapskate.Inlines
                      Cheapskate.ParserCombinators

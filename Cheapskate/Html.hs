@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Cheapskate.Render (renderDoc, renderBlocks, renderInlines) where
+module Cheapskate.Html (renderDoc, renderBlocks, renderInlines) where
 import Cheapskate.Types
 import Data.Text (Text)
 import Data.Char (isDigit, isHexDigit, isAlphaNum)

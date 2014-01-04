@@ -8,7 +8,7 @@ module Cheapskate (markdown,
                    ) where
 import Cheapskate.Types
 import Cheapskate.Parse
-import Cheapskate.Render
+import Cheapskate.Html
 import Data.Default (def)
 import Data.Data
 import Data.Generics.Uniplate.Data

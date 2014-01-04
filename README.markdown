@@ -23,16 +23,18 @@ As an executable:
 
 As a library:
 
-    {-# LANGUAGE OverloadedStrings #-}
-    import Cheapskate
-    import Text.Blaze.Html
+``` haskell
+{-# LANGUAGE OverloadedStrings #-}
+import Cheapskate
+import Text.Blaze.Html
 
-    html :: Html
-    html = toHtml $ markdown def{
-                             sanitize = True
-                           , allowRawHtml = True
-                           , preserveHardBreaks = False
-                           } "Hello *world*"
+html :: Html
+html = toHtml $ markdown def{
+                         sanitize = True
+                       , allowRawHtml = True
+                       , preserveHardBreaks = False
+                       } "Hello *world*"
+```
 
 If the markdown input you are converting comes from an untrusted source
 (e.g. a web form), you should *always* set `sanitize` to `True`.  This causes
@@ -47,6 +49,34 @@ You may also wish to disallow users from entering raw HTML for aesthetic,
 rather than security reasons.  In that case, set `allowRawHtml` to `True`,
 but let `sanitize` stay `True`, since it still affects attributes coming
 from markdown links and images.
+
+## Manipulating the parsed document
+
+You can manipulate the parsed document before rendering using the `walk`
+and `walkM` functions.  For example, you might want to highlight code blocks
+using highlighting-kate:
+
+``` haskell
+import Data.Text as T
+import Data.Text.Lazy as TL
+import Data.Text.IO as T
+import Data.Text.Lazy.IO as TL
+import Cheapskate
+import Text.Blaze.Html
+import Text.Blaze.Html.Renderer.Text
+import Text.Highlighting.Kate
+
+main = T.getContents >>=
+  TL.putStr . renderHtml . toHtml . walk addHighlighting . markdown def
+
+addHighlighting :: Block -> Block
+addHighlighting (CodeBlock (CodeAttr (Just lang)) t) =
+  HtmlBlock (T.concat $ TL.toChunks
+             $ renderHtml $ toHtml
+             $ formatHtmlBlock defaultFormatOpts
+             $ highlightAs (T.unpack lang) (T.unpack t))
+addHighlighting x = x
+```
 
 ## Extensions
 

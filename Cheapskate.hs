@@ -12,7 +12,7 @@ import Cheapskate.Render
 import Data.Default (def)
 import Data.Data
 import Data.Generics.Uniplate.Data
-import Text.Blaze.Html (ToMarkup(..), toHtml)
+import Text.Blaze.Html (ToMarkup(..))
 
 instance ToMarkup Doc
   where toMarkup = renderDoc

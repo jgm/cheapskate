@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Cheapskate.Parse (
          markdown
-       , processLines {- TODO for now -}
        ) where
 import Cheapskate.ParserCombinators
 import Cheapskate.Util
@@ -73,7 +72,7 @@ showElt (L _ lf) = show lf
 containerContinue :: Container -> Scanner
 containerContinue c =
   case containerType c of
-       BlockQuote     -> scanBlockquoteStart
+       BlockQuote     -> scanNonindentSpace *> scanBlockquoteStart
        IndentedCode   -> scanIndentSpace
        FencedCode{startColumn = col} ->
                          scanSpacesToColumn col
@@ -86,19 +85,20 @@ containerContinue c =
                                 (==' ')
                              return ())
        Reference{}    -> nfb scanBlankline >>
-                         nfb scanReference
+                         nfb (scanNonindentSpace *> scanReference)
        _              -> return ()
 {-# INLINE containerContinue #-}
 
 containerStart :: Bool -> Parser ContainerType
-containerStart _lastLineIsText =
-      (BlockQuote <$ scanBlockquoteStart)
+containerStart _lastLineIsText = scanNonindentSpace *>
+   (  (BlockQuote <$ scanBlockquoteStart)
   <|> parseListMarker
+   )
 
 verbatimContainerStart :: Bool -> Parser ContainerType
-verbatimContainerStart lastLineIsText = nfb scanBlankline *>
+verbatimContainerStart lastLineIsText = scanNonindentSpace *>
    (  parseCodeFence
-  <|> (guard (not lastLineIsText) *> (IndentedCode <$ scanIndentSpace))
+  <|> (guard (not lastLineIsText) *> (IndentedCode <$ char ' ' <* nfb scanBlankline))
   <|> (guard (not lastLineIsText) *> (RawHtmlBlock <$ parseHtmlBlockStart))
   <|> (guard (not lastLineIsText) *> (Reference <$ scanReference))
    )
@@ -404,13 +404,13 @@ leaf lastLineIsText = scanNonindentSpace *> (
 
 scanReference :: Scanner
 scanReference =
-  () <$ lookAhead (scanNonindentSpace >> pLinkLabel >> scanChar ':')
+  () <$ lookAhead (pLinkLabel >> scanChar ':')
 
 -- Scan the beginning of a blockquote:  up to three
 -- spaces indent, the `>` character, and an optional space.
 scanBlockquoteStart :: Scanner
 scanBlockquoteStart =
-  scanNonindentSpace >> scanChar '>' >> option () (scanChar ' ')
+  scanChar '>' >> option () (scanChar ' ')
 
 -- Parse the sequence of `#` characters that begins an ATX
 -- header, and return the number of characters.  We require
@@ -449,7 +449,6 @@ scanHRuleLine = do
 -- the fence part and the rest (after any spaces).
 parseCodeFence :: Parser ContainerType
 parseCodeFence = do
-  scanNonindentSpace
   col <- column <$> getPosition
   c <- satisfy $ inClass "`~"
   count 2 (char c)
@@ -465,14 +464,12 @@ parseCodeFence = do
 -- HTML comment, with no indentation.
 parseHtmlBlockStart :: Parser ()
 parseHtmlBlockStart = () <$ lookAhead
-  ( scanNonindentSpace *>
      ((do t <- pHtmlTag
           guard $ f $ fst t
           return $ snd t)
     <|> string "<!--"
     <|> string "-->"
      )
-  )
  where f (Opening name) = name `Set.member` blockHtmlTags
        f (SelfClosing name) = name `Set.member` blockHtmlTags
        f (Closing name) = name `Set.member` blockHtmlTags
@@ -492,7 +489,6 @@ blockHtmlTags = Set.fromList
 -- Parse a list marker and return the list type.
 parseListMarker :: Parser ContainerType
 parseListMarker = do
-  scanNonindentSpace
   col <- column <$> getPosition
   ty <- parseBullet <|> parseListNumber
   padding' <- (1 <$ scanBlankline)

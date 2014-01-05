@@ -362,7 +362,7 @@ processLine (lineNumber, txt) = do
   -- Apply the line-start scanners appropriate for each nested container.
   -- Return the remainder of the string, and the number of unmatched
   -- containers.
-  let (t', numUnmatched) = tryOldContainers (reverse $ top:rest) txt
+  let (t', numUnmatched) = tryOpenContainers (reverse $ top:rest) txt
 
   -- Some new containers can be started only after a blank.
   let lastLineIsText = numUnmatched == 0 &&
@@ -386,16 +386,14 @@ processLine (lineNumber, txt) = do
     -- otherwise, parse the remainder to see if we have new container starts:
     _ -> case tryNewContainers lastLineIsText (T.length txt - T.length t') t' of
 
-       ([], TextLine t) ->  -- no new containers, just a text line
-         case viewr cs of
-            -- if last child of top container is text line, then
-            -- we don't need to close unmatched containers, because this can be
-            -- a lazy continuation:
-            (_ :> L _ (TextLine _))
-              | ct /= IndentedCode -> addLeaf lineNumber (TextLine t)
-            -- otherwise, close unmatched containers before adding the line
-            _ -> replicateM numUnmatched closeContainer
-                 >> addLeaf lineNumber (TextLine t)
+       -- lazy continuation: text line, last line was text, no new containers,
+       -- some unmatched containers:
+       ([], TextLine t)
+           | numUnmatched > 0
+           , case viewr cs of
+                  (_ :> L _ (TextLine _)) -> True
+                  _                       -> False
+           , ct /= IndentedCode -> addLeaf lineNumber (TextLine t)
 
        -- if it's a setext header line and the top container has a textline
        -- as last child, add a setext header:
@@ -418,16 +416,21 @@ processLine (lineNumber, txt) = do
              (FencedCode{}:_,  BlankLine{}) -> return ()
              _ -> addLeaf lineNumber lf
 
-
-tryOldContainers :: [Container] -> Text -> (Text, Int)
-tryOldContainers cs t = case parse (scanners $ map containerContinue cs) t of
-                        Right (t', n)  -> (t', n)
-                        Left e         -> error $ "error parsing scanners: " ++
-                                           show e
+-- Try to match the scanners corresponding to any currently open containers.
+-- Return remaining text after matching scanners, plus the number of open
+-- containers whose scanners did not match.  (These will be closed unless
+-- we have a lazy text line.)
+tryOpenContainers :: [Container] -> Text -> (Text, Int)
+tryOpenContainers cs t = case parse (scanners $ map containerContinue cs) t of
+                         Right (t', n)  -> (t', n)
+                         Left e         -> error $ "error parsing scanners: " ++
+                                            show e
   where scanners [] = (,) <$> takeText <*> pure 0
         scanners (p:ps) = (p *> scanners ps)
                       <|> ((,) <$> takeText <*> pure (length (p:ps)))
 
+-- Try to match parsers for new containers.  Return list of new
+-- container types, and the leaf to add inside the new containers.
 tryNewContainers :: Bool -> Int -> Text -> ([ContainerType], Leaf)
 tryNewContainers lastLineIsText offset t =
   case parse newContainers t of
@@ -442,12 +445,13 @@ tryNewContainers lastLineIsText offset t =
              then (,) <$> pure regContainers <*> leaf lastLineIsText
              else (,) <$> pure (regContainers ++ verbatimContainers) <*>
                             textLineOrBlank
+
 textLineOrBlank :: Parser Leaf
 textLineOrBlank = consolidate <$> takeText
-  where consolidate ts = if T.all (==' ') ts
-                            then BlankLine ts
-                            else TextLine ts
+  where consolidate ts | T.all (==' ') ts = BlankLine ts
+                       | otherwise        = TextLine  ts
 
+-- Parse a leaf node.
 leaf :: Bool -> Parser Leaf
 leaf lastLineIsText = scanNonindentSpace *> (
      (ATXHeader <$> parseAtxHeaderStart <*>
@@ -462,17 +466,15 @@ leaf lastLineIsText = scanNonindentSpace *> (
                                     | T.last t' == '\\' -> t' <> "#"
                                     | otherwise -> t'
 
--- Scanners.
+-- Scanners
 
 scanReference :: Scanner
-scanReference =
-  () <$ lookAhead (pLinkLabel >> scanChar ':')
+scanReference = () <$ lookAhead (pLinkLabel >> scanChar ':')
 
 -- Scan the beginning of a blockquote:  up to three
 -- spaces indent, the `>` character, and an optional space.
 scanBlockquoteStart :: Scanner
-scanBlockquoteStart =
-  scanChar '>' >> option () (scanChar ' ')
+scanBlockquoteStart = scanChar '>' >> option () (scanChar ' ')
 
 -- Parse the sequence of `#` characters that begins an ATX
 -- header, and return the number of characters.  We require
@@ -486,14 +488,15 @@ parseAtxHeaderStart :: Parser Int
 parseAtxHeaderStart = do
   char '#'
   hashes <- upToCountChars 5 (== '#')
-  skip (==' ') <|> scanBlankline
+  -- hashes must be followed by space unless empty header:
+  notFollowedBy (skip (/= ' '))
   return $ T.length hashes + 1
 
 parseSetextHeaderLine :: Parser Int
 parseSetextHeaderLine = do
-  d <- char '-' <|> char '='
+  d <- satisfy (\c -> c == '-' || c == '=')
   let lev = if d == '=' then 1 else 2
-  many (char d)
+  skipWhile (== d)
   scanBlankline
   return lev
 
@@ -502,8 +505,8 @@ parseSetextHeaderLine = do
 -- spaces between the hyphens or asterisks."
 scanHRuleLine :: Scanner
 scanHRuleLine = do
-  c <- satisfy $ inClass "*_-"
-  count 2 $ scanSpaces >> char c
+  c <- satisfy (\c -> c == '*' || c == '_' || c == '-')
+  count 2 $ scanSpaces >> skip (== c)
   skipWhile (\x -> x == ' ' || x == c)
   endOfInput
 
@@ -512,14 +515,13 @@ scanHRuleLine = do
 parseCodeFence :: Parser ContainerType
 parseCodeFence = do
   col <- column <$> getPosition
-  c <- satisfy $ inClass "`~"
-  count 2 (char c)
-  extra <- takeWhile (== c)
+  cs <- takeWhile1 (=='`') <|> takeWhile1 (=='~')
+  guard $ T.length cs >= 3
   scanSpaces
-  rawattr <- takeWhile (/='`')
+  rawattr <- takeWhile (\c -> c /= '`' && c /= '~')
   endOfInput
   return $ FencedCode { startColumn = col
-                      , fence = T.pack [c,c,c] <> extra
+                      , fence = cs
                       , info = rawattr }
 
 -- Parse the start of an HTML block:  either an HTML tag or an
@@ -547,15 +549,18 @@ blockHtmlTags = Set.fromList
    "figure", "thead", "footer", "footer", "tr", "form", "ul",
    "h1", "h2", "h3", "h4", "h5", "h6", "video"]
 
-
 -- Parse a list marker and return the list type.
 parseListMarker :: Parser ContainerType
 parseListMarker = do
   col <- column <$> getPosition
   ty <- parseBullet <|> parseListNumber
+  -- padding is 1 if list marker followed by a blank line
+  -- or indented code.  otherwise it's the length of the
+  -- whitespace between the list marker and the following text:
   padding' <- (1 <$ scanBlankline)
           <|> (1 <$ (skip (==' ') *> lookAhead (count 4 (char ' '))))
           <|> (T.length <$> takeWhile (==' '))
+  -- text can't immediately follow the list marker:
   guard $ padding' > 0
   return $ ListItem { listType = ty
                     , markerColumn = col
@@ -572,7 +577,7 @@ listMarkerWidth (Numbered _ n) | n < 10    = 2
 -- Parse a bullet and return list type.
 parseBullet :: Parser ListType
 parseBullet = do
-  c <- satisfy $ inClass "+*-"
+  c <- satisfy (\c -> c == '+' || c == '*' || c == '-')
   unless (c == '+')
     $ nfb $ (count 2 $ scanSpaces >> skip (== c)) >>
           skipWhile (\x -> x == ' ' || x == c) >> endOfInput -- hrule
@@ -585,5 +590,3 @@ parseListNumber = do
     wrap <-  PeriodFollowing <$ skip (== '.')
          <|> ParenFollowing <$ skip (== ')')
     return $ Numbered wrap num
-
-

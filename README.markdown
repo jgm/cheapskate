@@ -164,7 +164,7 @@ is nested:
         - three
 
 
-    - new list
+      - new top-level list
 
 ### Indentation of list continuations
 

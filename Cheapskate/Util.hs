@@ -90,11 +90,11 @@ scanNonindentSpace = () <$ upToCountChars 3 (==' ')
 
 -- Scan a specified character.
 scanChar :: Char -> Scanner
-scanChar c = char c >> return ()
+scanChar c = skip (== c) >> return ()
 
 -- Scan a blankline.
 scanBlankline :: Scanner
-scanBlankline = skipWhile (==' ') *> endOfInput
+scanBlankline = scanSpaces *> endOfInput
 
 -- Scan 0 or more spaces
 scanSpaces :: Scanner

@@ -1,18 +1,17 @@
 # Cheapskate
 
-This is an experimental Markdown processor in pure Haskell.
-(A cheapskate is always in search of the best markdown.) It aims to process
-Markdown efficiently and in the most forgiving possible way.  It is about seven
-times faster than pandoc and uses a fifth the memory.  It is significantly
-faster, and much more accurate, than the markdown package on Hackage.
+This is an experimental Markdown processor in pure Haskell.  (A cheapskate is
+always in search of the best markdown.) It aims to process Markdown efficiently
+and in the most forgiving possible way.  It is about seven times faster than
+pandoc and uses a fifth the memory.  It is also significantly faster, and
+considerably more accurate, than the markdown package on Hackage.
 
-There is no such thing as an invalid Markdown document. Any
-string of characters is valid Markdown.  So the processor should
-finish efficiently no matter what input it gets. Garbage in
-should not cause an error or exponential slowdowns.  This processor
-has been tested on many large inputs consisting of random strings of
-characters, with fairly constant performance proportional to the input
-size. (Try `make fuzztest`.)
+There is no such thing as an invalid Markdown document. Any string of
+characters is valid Markdown.  So the processor should finish efficiently no
+matter what input it gets. Garbage in should not cause an error or exponential
+slowdowns.  This processor has been tested on many large inputs consisting of
+random strings of characters, with performance that is consistently linear with
+the input size. (Try `make fuzztest`.)
 
 ## Usage
 

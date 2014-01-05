@@ -3,8 +3,8 @@
 This is an experimental Markdown processor in pure Haskell.  (A cheapskate is
 always in search of the best markdown.) It aims to process Markdown efficiently
 and in the most forgiving possible way.  It is about seven times faster than
-pandoc and uses a fifth the memory.  It is also significantly faster, and
-considerably more accurate, than the markdown package on Hackage.
+`pandoc` and uses a fifth the memory.  It is also faster, and considerably
+more accurate, than the `markdown` package on Hackage.
 
 There is no such thing as an invalid Markdown document. Any string of
 characters is valid Markdown.  So the processor should finish efficiently no
@@ -12,6 +12,15 @@ matter what input it gets. Garbage in should not cause an error or exponential
 slowdowns.  This processor has been tested on many large inputs consisting of
 random strings of characters, with performance that is consistently linear with
 the input size. (Try `make fuzztest`.)
+
+## Installing
+
+To build, get the Haskell Platform, then:
+
+    cabal update && cabal install
+
+This will install both the `cheapskate` executable and the Haskell
+library.  A man page can be found in `man/man1` in the source.
 
 ## Usage
 
@@ -22,26 +31,18 @@ As an executable:
 As a library:
 
 ``` haskell
-{-# LANGUAGE OverloadedStrings #-}
 import Cheapskate
 import Text.Blaze.Html
 
-html :: Html
-html = toHtml $ markdown def{
-                         sanitize = True
-                       , allowRawHtml = True
-                       , preserveHardBreaks = False
-                       } "Hello *world*"
+toMarkdown :: Text -> Html
+toMarkdown = toHtml . markdown def
 ```
 
 If the markdown input you are converting comes from an untrusted source
 (e.g. a web form), you should *always* set `sanitize` to `True`.  This causes
-all raw HTML to be filtered through `xss-sanitize`'s `sanitizeBalance` function,
-and all markdown attributes (e.g. URLs and titles in links and images) to
-be filtered through `sanitizeAttribute`.  Otherwise you risk a XSS attack from
-raw HTML or a markdown link or image attribute attribute.  Note that
-`sanitizeBalance` will close unmatched tags, so it will not be possible
-to surround a markdown section with opening and closing `<div>` tags.
+the generated HTML to be filtered through `xss-sanitize`'s
+`sanitizeBalance` function. Otherwise you risk a XSS attack from
+raw HTML or a markdown link or image attribute attribute.
 
 You may also wish to disallow users from entering raw HTML for aesthetic,
 rather than security reasons.  In that case, set `allowRawHtml` to `True`,
@@ -57,15 +58,13 @@ using highlighting-kate:
 ``` haskell
 import Data.Text as T
 import Data.Text.Lazy as TL
-import Data.Text.IO as T
-import Data.Text.Lazy.IO as TL
 import Cheapskate
 import Text.Blaze.Html
 import Text.Blaze.Html.Renderer.Text
 import Text.Highlighting.Kate
 
-main = T.getContents >>=
-  TL.putStr . renderHtml . toHtml . walk addHighlighting . markdown def
+markdownWithHighlighting :: Text -> Html
+markdownWithHighlighting = toHtml . walk addHighlighting . markdown def
 
 addHighlighting :: Block -> Block
 addHighlighting (CodeBlock (CodeAttr lang _) t) =
@@ -301,12 +300,6 @@ blank lines.
 Link references may occur anywhere in the document, even in nested
 list contexts.  They need not be at the outer level.
 
-## Installing
-
-To build, get the Haskell Platform, then:
-
-    cabal update && cabal install
-
 ## Tests
 
 The `tests` subdirectory contains an extensive suite of tests,
@@ -329,9 +322,15 @@ test suite on another markdown processor by doing
 
     PROG=myothermarkdown make test
 
+## Benchmarks
+
+To run a crude benchmark comparing `cheapskate` to `pandoc`, do
+`make bench`.  Set the `BENCHPROGS` environment variable to
+compare to other implementations.
+
 ## License
 
-Copyright &copy; 2012--3 John MacFarlane.
+Copyright &copy; 2012, 2013, 2014 John MacFarlane.
 
 The library is released under the BSD license; see LICENSE for terms.
 

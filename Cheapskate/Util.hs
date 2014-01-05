@@ -64,7 +64,7 @@ isEscapable c = isAscii c && (isSymbol c || isPunctuation c)
 -- [Apples
 -- are     good].
 normalizeReference :: Text -> Text
-normalizeReference = T.toUpper . T.concat . T.split isWhitespace
+normalizeReference = T.toCaseFold . T.concat . T.split isWhitespace
 
 -- Scanners are implemented here as attoparsec parsers,
 -- which consume input and capture nothing.  They could easily

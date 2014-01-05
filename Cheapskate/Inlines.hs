@@ -26,11 +26,11 @@ pHtmlTag = do
   char '<'
   -- do not end the tag with a > character in a quoted attribute.
   closing <- (char '/' >> return True) <|> return False
-  tagname <- takeWhile1 (\c -> isAlphaNum c || c == '?' || c == '!')
+  tagname <- takeWhile1 (\c -> isAsciiAlphaNum c || c == '?' || c == '!')
   let tagname' = T.toLower tagname
   let attr = do ss <- takeWhile isSpace
                 x <- satisfy isLetter
-                xs <- takeWhile (\c -> isAlphaNum c || c == ':')
+                xs <- takeWhile (\c -> isAsciiAlphaNum c || c == ':')
                 skip (=='=')
                 v <- pQuoted '"' <|> pQuoted '\'' <|> takeWhile1 isAlphaNum
                       <|> return ""

@@ -194,13 +194,13 @@ The following diagram shows how the first line of a list item
 divides the following lines into three regions:
 
      -   My code
+      |     |
+      +-----+
 
-      +++++++
-
-Content to the left of the `+` signs will not be part of the list
-item.  Content to the right of the `+` signs will be indented code
+Content to the left of the marked region will not be part of the list
+item.  Content to the right of the marked region will be indented code
 under the list item.  Regular blocks that belong under the
-list item should start in the region of the `+` signs.
+list item should start inside the marked region.
 
 When the first line itself contains indented code, this code
 and subsequent indented code blocks should be indented five spaces past the
@@ -212,7 +212,7 @@ list marker:
 
 ### Raw HTML blocks
 
-Raw HTML blocks work a bit differently than in Markdown.pl.
+Raw HTML blocks work a bit differently than in `Markdown.pl`.
 A raw HTML block starts with a block-level HTML tag (opening or
 closing), or a comment start `<!--` or end `-->`, and goes until
 the next blank line.  The whole block is included as raw HTML.
@@ -295,6 +295,11 @@ the "Still a quote." is part of the block quote, because of laziness
 lines).  Laziness also affects lists. However, we can have a code
 block, ATX header, or horizontal rule between two paragraphs without any
 blank lines.
+
+### Link references
+
+Link references may occur anywhere in the document, even in nested
+list contexts.  They need not be at the outer level.
 
 ## Installing
 

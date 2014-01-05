@@ -1,16 +1,16 @@
 name:                cheapskate
-version:             0.1.0.0
+version:             0.1
 synopsis:            Experimental markdown processor.
 description:         This is an experimental Markdown processor in pure
-                     Haskell.  (A cheapskate is always in search of the best markdown.)
-                     It aims to process Markdown efficiently and in the most forgiving
-                     possible way.  It is designed for robustness and should handle even
-                     garbage input.
+                     Haskell.  It aims to process Markdown efficiently and in
+                     the most forgiving possible way.  It is designed to deal
+                     with any input, including garbage, with linear
+                     performance.  Output is sanitized by default for
+                     protection against XSS attacks.
                      .
                      Several markdown extensions are implemented, including
-                     fenced code blocks and significant list start numbers.
-                     All URLs are made into hyperlinks. See README.markdown
-                     for details.
+                     fenced code blocks, significant list start numbers, and
+                     autolinked URLs.  See README.markdown for details.
 homepage:            http://github.com/jgm/cheapskate
 license:             BSD3
 license-file:        LICENSE

@@ -34,13 +34,40 @@ markdown opts
   | debug opts = (\x -> trace (show x) $ Doc opts mempty) . processLines
   | otherwise  = Doc opts . processDocument . processLines
 
--- container stack:
+-- General parsing strategy:
+--
+-- Step 1:  processLines
+--
+-- We process the input line by line.  Each line modifies the
+-- container stack, by adding a leaf to the current open container,
+-- sometimes after closing old containers and/or opening new ones.
+--
+-- To open a container is to add it to the top of the container stack,
+-- so that new content will be added under this container.
+-- To close a container is to remove it from the container stack and
+-- make it a child of the container above it on the container stack.
+--
+-- When all the input has been processed, we close all open containers
+-- except the root (Document) container.  At this point we should also
+-- have a ReferenceMap containing any defined link references.
+--
+-- Step 2:  processDocument
+--
+-- We then convert this container structure into an AST.  This principally
+-- involves (a) gathering consecutive ListItem containers into lists, (b)
+-- gathering TextLine nodes that don't belong to verbatim containers into
+-- paragraphs, and (c) parsing the inline contents of non-verbatim TextLines.
+
+--------
+
+-- Container stack definitions:
 
 data ContainerStack =
   ContainerStack Container {- top -} [Container] {- rest -}
 
 type LineNumber   = Int
 
+-- Generic type for a container or a leaf.
 data Elt = C Container
          | L LineNumber Leaf
          deriving Show
@@ -75,6 +102,8 @@ showElt (C c) = show c
 showElt (L _ (TextLine s)) = show s
 showElt (L _ lf) = show lf
 
+-- Scanners that must be satisfied if the current open container
+-- is to be continued on a new line (ignoring lazy continuations).
 containerContinue :: Container -> Scanner
 containerContinue c =
   case containerType c of
@@ -95,12 +124,15 @@ containerContinue c =
        _              -> return ()
 {-# INLINE containerContinue #-}
 
+-- Defines parsers that open new containers.
 containerStart :: Bool -> Parser ContainerType
 containerStart _lastLineIsText = scanNonindentSpace *>
    (  (BlockQuote <$ scanBlockquoteStart)
   <|> parseListMarker
    )
 
+-- Defines parsers that open new verbatim containers (containers
+-- that take only TextLine and BlankLine as children).
 verbatimContainerStart :: Bool -> Parser ContainerType
 verbatimContainerStart lastLineIsText = scanNonindentSpace *>
    (  parseCodeFence
@@ -109,6 +141,7 @@ verbatimContainerStart lastLineIsText = scanNonindentSpace *>
   <|> (guard (not lastLineIsText) *> (Reference <$ scanReference))
    )
 
+-- Leaves of the container structure (they don't take children).
 data Leaf = TextLine Text
           | BlankLine Text
           | ATXHeader Int Text
@@ -118,6 +151,7 @@ data Leaf = TextLine Text
 
 type ContainerM = RWS () ReferenceMap ContainerStack
 
+-- Close the whole container stack, leaving only the root Document container.
 closeStack :: ContainerM Container
 closeStack = do
   ContainerStack top rest  <- get
@@ -125,6 +159,10 @@ closeStack = do
      then return top
      else closeContainer >> closeStack
 
+-- Close the top container on the stack.  If the container is a Reference
+-- container, attempt to parse the reference and update the reference map.
+-- If it is a list item container, move a final BlankLine outside the list
+-- item.
 closeContainer :: ContainerM ()
 closeContainer = do
   ContainerStack top rest <- get
@@ -160,6 +198,7 @@ closeContainer = do
                  put $ ContainerStack (Container ct' (cs' |> C top)) rs
              [] -> return ()
 
+-- Add a leaf to the top container.
 addLeaf :: LineNumber -> Leaf -> ContainerM ()
 addLeaf lineNum lf = do
   ContainerStack top rest <- get
@@ -172,19 +211,19 @@ addLeaf lineNum lf = do
         (Container ct cs, _) ->
                  put $ ContainerStack (Container ct (cs |> L lineNum lf)) rest
 
+-- Add a container to the container stack.
 addContainer :: ContainerType -> ContainerM ()
 addContainer ct = modify $ \(ContainerStack top rest) ->
   ContainerStack (Container ct mempty) (top:rest)
 
-extractText :: Elt -> Text
-extractText (L _ (TextLine t)) = t
-extractText _ = mempty
+-- Step 2
+
+-- Convert Document container and reference map into an AST.
 processDocument :: (Container, ReferenceMap) -> Blocks
 processDocument (Container ct cs, refmap) =
   case ct of
     Document -> processElts refmap (toList cs)
     _        -> error "top level container is not Document"
-
 
 -- Turn the result of `processLines` into a proper AST.
 -- This requires grouping text lines into paragraphs
@@ -229,38 +268,46 @@ processElts refmap (C (Container ct cs) : rest) =
     ListItem { listType = listType' } ->
         singleton (List isTight listType' items') <> processElts refmap rest'
               where xs = takeListItems rest
+
                     rest' = drop (length xs) rest
-                    takeListItems (C c@(Container ListItem { listType = lt' } _)
-                       : zs)
+
+                    -- take list items as long as list type matches and we
+                    -- don't hit two blank lines:
+                    takeListItems
+                      (C c@(Container ListItem { listType = lt' } _) : zs)
                       | listTypesMatch lt' listType' = C c : takeListItems zs
                     takeListItems (lf@(L _ (BlankLine _)) :
-                             c@(C (Container ListItem { listType = lt' } _)) :
-                             zs)
+                      c@(C (Container ListItem { listType = lt' } _)) : zs)
                       | listTypesMatch lt' listType' = lf : c : takeListItems zs
                     takeListItems _ = []
+
                     listTypesMatch (Bullet c1) (Bullet c2) = c1 == c2
                     listTypesMatch (Numbered w1 _) (Numbered w2 _) = w1 == w2
                     listTypesMatch _ _ = False
+
                     items = mapMaybe getItem (Container ct cs : [c | C c <- xs])
+
                     getItem (Container ListItem{} cs') = Just $ toList cs'
-                    getItem _                         = Nothing
+                    getItem _                          = Nothing
+
                     items' = map (processElts refmap) items
-                    isTight = not (any isBlankLine xs) &&
-                              all tightListItem items
+
+                    isTight = tightListItem xs && all tightListItem items
 
     FencedCode _ _ info' -> singleton (CodeBlock attr txt) <>
                                processElts refmap rest
                   where txt = joinLines $ map extractText $ toList cs
-                        attr = case T.words info' of
-                                  []     -> CodeAttr "" ""
-                                  (w:ws) -> CodeAttr w (T.unwords ws)
+                        attr = CodeAttr x (T.strip y)
+                        (x,y) = T.break (==' ') info'
 
     IndentedCode -> singleton (CodeBlock (CodeAttr "" "") txt)
                     <> processElts refmap rest'
                   where txt = joinLines $ stripTrailingEmpties
                               $ concatMap extractCode cbs
+
                         stripTrailingEmpties = reverse .
                           dropWhile (T.all (==' ')) . reverse
+
                         -- explanation for next line:  when we parsed
                         -- the blank line, we dropped 0-3 spaces.
                         -- but for this, code block context, we want
@@ -270,8 +317,10 @@ processElts refmap (C (Container ct cs) : rest) =
                         extractCode (C (Container IndentedCode cs')) =
                           map extractText $ toList cs'
                         extractCode _ = []
+
                         (cbs, rest') = span isIndentedCodeOrBlank
                                        (C (Container ct cs) : rest)
+
                         isIndentedCodeOrBlank (L _ BlankLine{}) = True
                         isIndentedCodeOrBlank (C (Container IndentedCode _))
                                                               = True
@@ -280,14 +329,21 @@ processElts refmap (C (Container ct cs) : rest) =
     RawHtmlBlock -> singleton (HtmlBlock txt) <> processElts refmap rest
                   where txt = joinLines (map extractText (toList cs))
 
-    -- References have already been taken into account in the reference map.
+    -- References have already been taken into account in the reference map,
+    -- so we just skip.
     Reference{} -> processElts refmap rest
 
    where isBlankLine (L _ BlankLine{}) = True
          isBlankLine _ = False
+
          tightListItem [] = True
          tightListItem xs = not $ any isBlankLine xs
 
+extractText :: Elt -> Text
+extractText (L _ (TextLine t)) = t
+extractText _ = mempty
+
+-- Step 1
 
 processLines :: Text -> (Container, ReferenceMap)
 processLines t = (doc, refmap)

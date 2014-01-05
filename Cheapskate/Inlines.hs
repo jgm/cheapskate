@@ -146,16 +146,16 @@ parseInlines refmap t =
 
 pInline :: ReferenceMap -> Parser Inlines
 pInline refmap =
-           pSpace
-       <|> pAsciiStr
+           pAsciiStr
+       <|> pSpace
        <|> pEnclosure '*' refmap  -- strong/emph
        <|> (notAfter isAlphaNum *> pEnclosure '_' refmap)
+       <|> pCode
        <|> pLink refmap
        <|> pImage refmap
-       <|> pCode
-       <|> pEntity
        <|> pRawHtml
        <|> pAutolink
+       <|> pEntity
        <|> pSym
 
 -- Parse spaces or newlines, and determine whether

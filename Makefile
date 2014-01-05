@@ -16,9 +16,9 @@ test:
 	make -C tests --quiet clean all
 
 fuzztest:
-	cat /dev/random | head -c 100000 | iconv -f latin1 -t utf-8 | time $(PROG) >/dev/null ; \
-	cat /dev/random | head -c 1000000 | iconv -f latin1 -t utf-8 | time $(PROG) >/dev/null ; \
-	cat /dev/random | head -c 10000000 | iconv -f latin1 -t utf-8 | time $(PROG) >/dev/null
+	cat /dev/urandom | head -c 100000 | iconv -f latin1 -t utf-8 | time $(PROG) >/dev/null ; \
+	cat /dev/urandom | head -c 1000000 | iconv -f latin1 -t utf-8 | time $(PROG) >/dev/null ; \
+	cat /dev/urandom | head -c 10000000 | iconv -f latin1 -t utf-8 | time $(PROG) >/dev/null
 
 bench:
 	for prog in $(PROG) $(BENCHPROGS); do \

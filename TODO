@@ -1,7 +1,2 @@
-- Alternative renderer for [Tag Text] (to use with xss-sanitize)
-- Ability to manipulate code blocks
-
-
-Note:
-- tried replacing Text with ByteString, but performance impact was
-  minimal.
+-- proper command option parsing, version, help, etc.
+-- man page

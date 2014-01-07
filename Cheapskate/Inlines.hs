@@ -10,7 +10,7 @@ import Cheapskate.Util
 import Cheapskate.Types
 import Data.Char hiding (Space)
 import qualified Data.Sequence as Seq
-import Data.Sequence (singleton, (<|))
+import Data.Sequence (singleton, (<|), viewl, ViewL(..))
 import Prelude hiding (takeWhile)
 import Control.Applicative
 import Data.Monoid
@@ -370,15 +370,14 @@ pReferenceLink refmap rawlab lab = do
 pImage :: ReferenceMap -> Parser Inlines
 pImage refmap = do
   char '!'
-  lab <- pLinkLabel
-  let lab' = parseInlines refmap lab
-  fmap linkToImage <$> (pInlineLink lab' <|> pReferenceLink refmap lab lab')
-    -- fallback without backtracking if it's not an image:
-    <|> return (singleton (Str "![") <> lab' <> singleton (Str "]"))
+  (linkToImage <$> pLink refmap) <|> return (singleton (Str "!"))
 
-linkToImage :: Inline -> Inline
-linkToImage (Link lab url tit) = Image lab url tit
-linkToImage x                  = x
+linkToImage :: Inlines -> Inlines
+linkToImage ils =
+  case viewl ils of
+        (Link lab url tit :< x)
+          | Seq.null x -> singleton (Image lab url tit)
+        _ -> singleton (Str "!") <> ils
 
 -- An entity.  We store these in a special inline element.
 -- This ensures that entities in the input come out as

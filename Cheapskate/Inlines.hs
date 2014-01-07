@@ -370,9 +370,14 @@ pReferenceLink refmap rawlab lab = do
 pImage :: ReferenceMap -> Parser Inlines
 pImage refmap = do
   char '!'
-  let linkToImage (Link lab url tit) = Image lab url tit
-      linkToImage x                  = x
-  fmap linkToImage <$> pLink refmap
+  lab <- pLinkLabel
+  let lab' = parseInlines refmap lab
+  fmap linkToImage <$> (pInlineLink lab' <|> pReferenceLink refmap lab lab')
+    -- fallback without backtracking if it's not an image:
+    <|> return (singleton (Str "![") <> lab' <> singleton (Str "]"))
+
+linkToImage (Link lab url tit) = Image lab url tit
+linkToImage x                  = x
 
 -- An entity.  We store these in a special inline element.
 -- This ensures that entities in the input come out as

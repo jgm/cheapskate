@@ -376,6 +376,7 @@ pImage refmap = do
     -- fallback without backtracking if it's not an image:
     <|> return (singleton (Str "![") <> lab' <> singleton (Str "]"))
 
+linkToImage :: Inline -> Inline
 linkToImage (Link lab url tit) = Image lab url tit
 linkToImage x                  = x
 

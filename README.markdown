@@ -45,7 +45,7 @@ the generated HTML to be filtered through `xss-sanitize`'s
 raw HTML or a markdown link or image attribute attribute.
 
 You may also wish to disallow users from entering raw HTML for aesthetic,
-rather than security reasons.  In that case, set `allowRawHtml` to `True`,
+rather than security reasons.  In that case, set `allowRawHtml` to `False`,
 but let `sanitize` stay `True`, since it still affects attributes coming
 from markdown links and images.
 

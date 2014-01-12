@@ -5,6 +5,7 @@ module Cheapskate.Inlines (
       , pReference
       , pLinkLabel)
 where
+import Cheapskate.Lex
 import Cheapskate.ParserCombinators
 import Cheapskate.Util
 import Cheapskate.Types
@@ -19,6 +20,9 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Set as Set
+
+parseInlines :: ReferenceMap -> Text -> Inlines
+parseInlines _ = singleton . RawHtml . T.pack . show . alexScanTokens . T.unpack
 
 -- Returns tag type and whole tag.
 pHtmlTag :: Parser (HtmlTagType, Text)
@@ -138,11 +142,13 @@ pSatisfy p =
 
 -- Parse a text into inlines, resolving reference links
 -- using the reference map.
+{-
 parseInlines :: ReferenceMap -> Text -> Inlines
 parseInlines refmap t =
   case parse (msum <$> many (pInline refmap) <* endOfInput) t of
        Left e   -> error ("parseInlines: " ++ show e) -- should not happen
        Right r  -> r
+-}
 
 pInline :: ReferenceMap -> Parser Inlines
 pInline refmap =
@@ -436,5 +442,3 @@ autoLink t = singleton $ Link (toInlines t) t (T.empty)
 emailLink :: Text -> Inlines
 emailLink t = singleton $ Link (singleton $ Str t)
                                ("mailto:" <> t) (T.empty)
-
-

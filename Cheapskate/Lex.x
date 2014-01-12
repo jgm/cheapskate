@@ -1,6 +1,6 @@
 {
 {-# OPTIONS_GHC -w #-}
-module Cheapskate.Lex (alexScanTokens) where
+module Cheapskate.Lex (alexScanTokens, Token(..)) where
 }
 
 %wrapper "basic"
@@ -29,9 +29,7 @@ $punct = [\[ \] \( \) \{ \} \_ \# \& \^ \! \* \+ \= \' \` \| \~ \. \; \? \! \: \
 
 tokens :-
 
-  $white+                               { \s -> if hasLineBreak s
-                                                   then LINEBREAK s
-                                                   else SPACES s }
+  $white+                               { handleWhitespace }
   @backtickspan / { checkBackticks }    { CODESPAN . stripBackticks }
   $alphanum+                            { CHARS }
   "\" .                                 { CHARS . drop 1 }
@@ -57,7 +55,8 @@ tokens :-
 -- The token type:
 data Token
   = SPACES String
-  | LINEBREAK String
+  | HARDBREAK
+  | SOFTBREAK
   | CODESPAN String
   | BRACKETL
   | BRACKETR
@@ -72,7 +71,6 @@ data Token
   | CHARS String
   | ENTITY String
   | HTML String
-  | URI String
   deriving (Eq, Show)
 
 -- check that the token is not preceded or followed by backtick character:
@@ -98,9 +96,9 @@ stripBackticks = reverse . go . reverse . go
 stripDelims :: String -> String
 stripDelims = reverse . drop 1 . reverse . drop 1
 
--- contains two spaces followed by a newline
-hasLineBreak :: String -> Bool
-hasLineBreak s = case break (=='\n') s of
-                      (' ':' ':_, '\n':_) -> True
-                      _ -> False
+handleWhitespace :: String -> Token
+handleWhitespace s = case break (=='\n') s of
+                         (' ':' ':_, '\n':_) -> HARDBREAK
+                         (_,         '\n':_) -> SOFTBREAK
+                         _                   -> SPACES s
 }

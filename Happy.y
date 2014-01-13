@@ -13,7 +13,8 @@ import Data.Monoid
 
 %token
   sp             { SPACES $$ }
-  linebreak      { LINEBREAK }
+  hardbreak      { HARDBREAK }
+  softbreak      { SOFTBREAK }
   code           { CODESPAN $$ }
   '['            { BRACKETL }
   ']'            { BRACKETR }
@@ -30,23 +31,32 @@ import Data.Monoid
   html           { HTML $$ }
 
 %%
-Inls  :                   { mempty }
+Inls  :                   { Seq.empty }
       | Inls Inl          { $1 Seq.|> $2 }
 Inl   : sp                { Space }
-      | linebreak         { LineBreak }
+      | hardbreak         { LineBreak }
+      | softbreak         { SoftBreak }
       | chars             { Str $ T.pack $1 }
-      | autolinkurl       { \s -> let t = T.pack $1 in
-                                Link (Seq.singleton $ Str t) t mempty }
-      | autolinkemail     { \s -> let {t = T.pack $1;
-                                       t' = T.pack "mailto:" <> t} in
-                                Link (Seq.singleton $ Str t) t' mempty }
+      | autolinkurl       { let {t = T.pack $1} in
+                            Link (Seq.singleton $ Str t) t mempty }
+      | autolinkemail     { let {t = T.pack $1;
+                                t' = T.pack "mailto:" <> t} in
+                             Link (Seq.singleton $ Str t) t' mempty }
       | code              { Code $ T.pack $1 }
       | entity            { Entity $ T.pack $1 }
-      | html              { Html $ T.pack $1 }
+      | html              { RawHtml $ T.pack $1 }
+      | stars             { Str $ T.pack "STARS" }
+      | ulstart           { Str $ T.pack "ULSTART" }
+      | ulend             { Str $ T.pack "ULEND" }
+      | '['               { Str $ T.pack "[" }
+      | ']'               { Str $ T.pack "]" }
+      | '('               { Str $ T.pack "(" }
+      | ')'               { Str $ T.pack ")" }
+      | '!'               { Str $ T.pack "!" }
 {
 
 parseError :: [Token] -> a
 parseError ts = error $ "Parse error at " ++ show (take 3 ts)
 
-main = getContents >>= print . inlines . alexScanTokens
+main = getContents >>= print . Seq.length . inlines . alexScanTokens
 }

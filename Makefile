@@ -8,6 +8,13 @@ SOURCES=bin/main.hs Cheapskate.hs Cheapskate/Parse.hs Cheapskate/Types.hs Cheaps
 $(PROG): $(SOURCES)
 	cabal configure --user && cabal build
 
+Happy.hs: Happy.y
+	happy -a -g -c -s $<
+Cheapskate/Lex.hs: Cheapskate/Lex.x
+	alex -g $<
+Happy: Happy.hs Cheapskate/Lex.hs
+	ghc --make Happy
+
 prof:
 	cabal configure --enable-library-profiling --enable-executable-profiling --user && cabal build ; \
 	  echo "To profile:  $(PROG) +RTS -pa -V0.0002 -RTS"

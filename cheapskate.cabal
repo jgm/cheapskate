@@ -35,6 +35,7 @@ library
                      Cheapskate.Html
   other-modules:     Cheapskate.Util
                      Cheapskate.Inlines
+                     Cheapskate.NewInlines
                      Cheapskate.ParserCombinators
                      Cheapskate.Lex
   build-depends:     base >=4.4 && <4.8,

@@ -30,18 +30,19 @@ $punct = [\[ \] \( \) \{ \} \_ \# \& \^ \! \* \+ \= \' \` \| \~ \. \; \? \! \: \
 tokens :-
 
   $white+                               { handleWhitespace }
-  @backtickspan / { checkBackticks }    { CODESPAN . stripBackticks }
+  @backtickspan / { checkBackticks }    { CODESPAN }
   $alphanum+                            { CHARS }
   "\" .                                 { CHARS . drop 1 }
-  "["                                   { const BRACKETL }
-  "]"                                   { const BRACKETR }
-  "("                                   { const PARENL }
-  ")"                                   { const PARENR }
-  "!"                                   { const BANG }
-  "*"{1,3}                              { STARS . length }
-  $white ^ "_"{1,3}                     { STARTUNDERSCORES . length }
-  ^ "_"{1,3}                            { STARTUNDERSCORES . length }
-  "_"{1,3} / { followedBySpace }        { ENDUNDERSCORES . length }
+  "["                                   { const $ SYM '[' }
+  "]"                                   { const $ SYM ']' }
+  "("                                   { const $ SYM '(' }
+  ")"                                   { const $ SYM ')' }
+  "'"                                   { const $ SYM '\'' }
+  [\"]                                  { const $ SYM '"' }
+  "!"                                   { const $ SYM '!' }
+  "*"                                   { const $ SYM '*' }
+  $alphanum ^ [_]+ / $alphanum          { CHARS }
+  "_"                                   { const $ SYM '_' }
   @entity                               { ENTITY }
   @htmlcomment                          { HTML }
   @htmltag                              { HTML }
@@ -54,18 +55,11 @@ tokens :-
 
 -- The token type:
 data Token
-  = SPACES String
+  = SPACE
   | HARDBREAK
   | SOFTBREAK
   | CODESPAN String
-  | BRACKETL
-  | BRACKETR
-  | PARENL
-  | PARENR
-  | BANG
-  | STARS Int
-  | STARTUNDERSCORES Int
-  | ENDUNDERSCORES Int
+  | SYM Char
   | AUTOLINKURL String
   | AUTOLINKEMAIL String
   | CHARS String
@@ -86,19 +80,15 @@ followedBySpace _ _ len after =
        Nothing    -> True
        Just (x,_) -> x == 32 || x == 10
 
--- strip surrounding backticks and optionally one whitespace
-stripBackticks :: String -> String
-stripBackticks = reverse . go . reverse . go
-  where go = dropOneSpace . dropWhile (=='`')
-        dropOneSpace (' ':xs) = xs
-        dropOneSpace xs = xs
-
 stripDelims :: String -> String
 stripDelims = reverse . drop 1 . reverse . drop 1
 
 handleWhitespace :: String -> Token
 handleWhitespace s = case break (=='\n') s of
-                         (' ':' ':_, '\n':_) -> HARDBREAK
-                         (_,         '\n':_) -> SOFTBREAK
-                         _                   -> SPACES s
+                          (_, [])        -> SPACE
+                          (' ':' ':_, _) -> HARDBREAK 
+                          _              -> SOFTBREAK
+
+getLength :: String -> Int
+getLength = fromIntegral . length
 }

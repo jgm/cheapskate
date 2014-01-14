@@ -20,9 +20,10 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Set as Set
+import Cheapskate.NewInlines (parseInlines)
 
-parseInlines :: ReferenceMap -> Text -> Inlines
-parseInlines _ = singleton . RawHtml . T.pack . show . alexScanTokens . T.unpack
+-- parseInlines :: ReferenceMap -> Text -> Inlines
+-- parseInlines _ = singleton . RawHtml . T.pack . show . alexScanTokens . T.unpack
 
 -- Returns tag type and whole tag.
 pHtmlTag :: Parser (HtmlTagType, Text)

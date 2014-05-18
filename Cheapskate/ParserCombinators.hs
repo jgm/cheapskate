@@ -133,6 +133,7 @@ p <?> msg = Parser $ \st ->
            Left $ ParseError startpos msg
        Right r                 -> Right r
 {-# INLINE (<?>) #-}
+infixl 5 <?>
 
 parse :: Parser a -> Text -> Either ParseError a
 parse p t =

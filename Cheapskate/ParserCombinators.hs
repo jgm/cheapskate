@@ -38,6 +38,7 @@ import Control.Applicative
 import qualified Data.Set as Set
 
 data Position = Position { line :: Int, column :: Int }
+     deriving (Ord, Eq)
 
 instance Show Position where
   show (Position ln cn) = "line " ++ show ln ++ " column " ++ show cn
@@ -90,8 +91,15 @@ instance Alternative Parser where
   empty = Parser $ \st -> Left $ ParseError (position st) "empty"
   (Parser f) <|> (Parser g) = Parser $ \st ->
     case f st of
-         Right res  -> Right res
-         _          -> g st
+         Right res                 -> Right res
+         Left (ParseError pos msg) ->
+           case g st of
+             Right res                   -> Right res
+             Left (ParseError pos' msg') ->
+               if pos' > pos
+                  -- return error for farthest match
+                  then Left $ ParseError pos' msg'
+                  else Left $ ParseError pos msg
   {-# INLINE empty #-}
   {-# INLINE (<|>) #-}
 

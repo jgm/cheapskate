@@ -2,6 +2,7 @@ module Cheapskate.ParserCombinators (
     Position(..)
   , Parser
   , parse
+  , (<?>)
   , satisfy
   , peekChar
   , peekLastChar
@@ -43,6 +44,7 @@ data Position = Position { line :: Int, column :: Int }
 instance Show Position where
   show (Position ln cn) = "line " ++ show ln ++ " column " ++ show cn
 
+-- the String indicates what the parser was expecting
 data ParseError = ParseError Position String deriving Show
 
 data ParserState = ParserState { subject  :: Text
@@ -88,18 +90,19 @@ instance Applicative Parser where
   {-# INLINE (<*>) #-}
 
 instance Alternative Parser where
-  empty = Parser $ \st -> Left $ ParseError (position st) "empty"
+  empty = Parser $ \st -> Left $ ParseError (position st) "(empty)"
   (Parser f) <|> (Parser g) = Parser $ \st ->
     case f st of
          Right res                 -> Right res
          Left (ParseError pos msg) ->
            case g st of
              Right res                   -> Right res
-             Left (ParseError pos' msg') ->
-               if pos' > pos
+             Left (ParseError pos' msg') -> Left $
+               case () of
                   -- return error for farthest match
-                  then Left $ ParseError pos' msg'
-                  else Left $ ParseError pos msg
+                  _ | pos' > pos  -> ParseError pos' msg'
+                    | pos' < pos  -> ParseError pos msg
+                    | pos' == pos -> ParseError pos (msg ++ " or " ++ msg')
   {-# INLINE empty #-}
   {-# INLINE (<|>) #-}
 
@@ -114,13 +117,22 @@ instance Monad Parser where
   {-# INLINE (>>=) #-}
 
 instance MonadPlus Parser where
-  mzero = Parser $ \st -> Left $ ParseError (position st) "mzero"
+  mzero = Parser $ \st -> Left $ ParseError (position st) "(mzero)"
   mplus p1 p2 = Parser $ \st ->
     case evalParser p1 st of
          Right res  -> Right res
          Left _     -> evalParser p2 st
   {-# INLINE mzero #-}
   {-# INLINE mplus #-}
+
+(<?>) :: Parser a -> String -> Parser a
+p <?> msg = Parser $ \st ->
+  let startpos = position st in
+  case evalParser p st of
+       Left (ParseError pos _) ->
+           Left $ ParseError startpos msg
+       Right r                 -> Right r
+{-# INLINE (<?>) #-}
 
 parse :: Parser a -> Text -> Either ParseError a
 parse p t =
@@ -141,7 +153,7 @@ satisfy f = Parser g
   where g st = case T.uncons (subject st) of
                     Just (c, _) | f c ->
                          success (advance st (T.singleton c)) c
-                    _ -> failure st "satisfy"
+                    _ -> failure st "character meeting condition"
 {-# INLINE satisfy #-}
 
 peekChar :: Parser (Maybe Char)
@@ -183,7 +195,7 @@ endOfInput :: Parser ()
 endOfInput = Parser $ \st ->
   if T.null (subject st)
      then success st ()
-     else failure st "endOfInput"
+     else failure st "end of input"
 {-# INLINE endOfInput #-}
 
 char :: Char -> Parser Char
@@ -219,7 +231,7 @@ takeTill f = takeWhile (not . f)
 takeWhile1 :: (Char -> Bool) -> Parser Text
 takeWhile1 f = Parser $ \st ->
   case T.takeWhile f (subject st) of
-       t | T.null t  -> failure st "takeWhile1"
+       t | T.null t  -> failure st "characters satisfying condition"
          | otherwise -> success (advance st t) t
 {-# INLINE takeWhile1 #-}
 
@@ -233,7 +245,7 @@ skip :: (Char -> Bool) -> Parser ()
 skip f = Parser $ \st ->
   case T.uncons (subject st) of
        Just (c,_) | f c -> success (advance st (T.singleton c)) ()
-       _                -> failure st "skip"
+       _                -> failure st "character satisfying condition"
 {-# INLINE skip #-}
 
 skipWhile :: (Char -> Bool) -> Parser ()

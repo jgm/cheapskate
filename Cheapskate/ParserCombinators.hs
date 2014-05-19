@@ -102,7 +102,8 @@ instance Alternative Parser where
                   -- return error for farthest match
                   _ | pos' > pos  -> ParseError pos' msg'
                     | pos' < pos  -> ParseError pos msg
-                    | pos' == pos -> ParseError pos (msg ++ " or " ++ msg')
+                    | otherwise {- pos' == pos -}
+                                  -> ParseError pos (msg ++ " or " ++ msg')
   {-# INLINE empty #-}
   {-# INLINE (<|>) #-}
 
@@ -129,7 +130,7 @@ instance MonadPlus Parser where
 p <?> msg = Parser $ \st ->
   let startpos = position st in
   case evalParser p st of
-       Left (ParseError pos _) ->
+       Left (ParseError _ _) ->
            Left $ ParseError startpos msg
        Right r                 -> Right r
 {-# INLINE (<?>) #-}

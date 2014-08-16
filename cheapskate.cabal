@@ -27,6 +27,10 @@ Source-repository head
   type:              git
   location:          git://github.com/jgm/cheapskate.git
 
+Flag dingus
+  Description:       Build cheapskate-dingus cgi script.
+  Default:           False
+
 library
   hs-source-dirs:    .
   exposed-modules:   Cheapskate
@@ -52,12 +56,24 @@ library
 executable cheapskate
   main-is:           main.hs
   hs-source-dirs:    bin
-  other-extensions:  OverloadedStrings
   build-depends:     base >=4.4 && <4.8,
                      cheapskate,
                      bytestring,
                      blaze-html >=0.6 && < 0.8,
                      text >= 0.9 && < 1.2
   default-language:  Haskell2010
+  ghc-options:       -Wall -fno-warn-unused-do-bind
+  ghc-prof-options:  -auto-all -caf-all -rtsopts
+
+executable cheapskate-dingus
+  main-is:           cheapskate-dingus.hs
+  hs-source-dirs:    bin
+  build-depends:     base, aeson, cheapskate, blaze-html,
+                     text, wai-extra, wai >= 0.3, http-types
+  default-language:  Haskell2010
+  if flag(dingus)
+    Buildable:       True
+  else
+    Buildable:       False
   ghc-options:       -Wall -fno-warn-unused-do-bind
   ghc-prof-options:  -auto-all -caf-all -rtsopts

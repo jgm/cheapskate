@@ -8,6 +8,8 @@ import Network.HTTP.Types.Status (status200)
 import Network.HTTP.Types.Header (hContentType)
 import Network.HTTP.Types.URI (queryToQueryText)
 import Cheapskate
+import Paths_cheapskate (version)
+import Data.Version (showVersion)
 import qualified Data.Text as T
 import Text.Blaze.Html.Renderer.Text
 import Text.Blaze.Html
@@ -32,7 +34,7 @@ app req respond = do
   let html = renderHtml $ toHtml $ markdown def{ sanitize = False } text
   let output = encode $ object [ T.pack "name" .= T.pack "cheapskate"
                                 , T.pack "html" .= html
-                                , T.pack "version" .= T.pack "0.1.0.1"]
+                                , T.pack "version" .= T.pack (showVersion version)]
   respond $ responseLBS status200 [(hContentType,"text/json; charset=UTF-8")] output
 
 checkLength :: Text -> IO Text

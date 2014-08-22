@@ -27,12 +27,12 @@ main :: IO ()
 main = do
   argv <- getArgs
   let (flags, args, errs) = getOpt Permute options argv
-  let header = "Usage: citeproc [OPTION..] [FILE..]"
+  let header = "Usage: cheapskate [OPTION..] [FILE..]"
   unless (null errs) $ do
     hPutStr stderr $ usageInfo (unlines $ errs ++ [header]) options
     exitWith $ ExitFailure 1
   when (Version `elem` flags) $ do
-    putStrLn $ "biblio2yaml " ++ showVersion version
+    putStrLn $ "cheapskate " ++ showVersion version
     exitWith ExitSuccess
   when (Help `elem` flags) $ do
     putStrLn $ usageInfo header options

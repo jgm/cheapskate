@@ -1,3 +1,14 @@
+cheapskate 0.1.0.2 (08 Dec 2014)
+
+  * Increased upper bounds for text (RyanGlScott), mtl.
+  * Fixed usage message in command-line utility (cdosborn).
+  * Added flag to build `cheapskate-dingus`.
+  * Dingus:  extract version from Paths_cheapskate.
+  * Fixed compiler warnings.
+  * Added `(<?>)`, made string in `ParseError` describe what is expected.
+  * On parse failure, return error with greatest position. This generally
+    gives more useful messages.
+
 cheapskate 0.1.0.1 (10 Mar 2014)
 
   * Increased version bounds for text, blaze-html.

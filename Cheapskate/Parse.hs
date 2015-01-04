@@ -460,7 +460,7 @@ leaf lastLineIsText = scanNonindentSpace *> (
    <|> (Rule <$ scanHRuleLine)
    <|> textLineOrBlank
   )
-  where removeATXSuffix t = case T.dropWhileEnd (`elem` " #") t of
+  where removeATXSuffix t = case T.dropWhileEnd (`elem` (" #" :: String)) t of
                                  t' | T.null t' -> t'
                                       -- an escaped \#
                                     | T.last t' == '\\' -> t' <> "#"

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings #-}
 module Cheapskate.Html (renderDoc, renderBlocks, renderInlines) where
 import Cheapskate.Types
 import Data.Text (Text)
@@ -8,7 +8,10 @@ import qualified Text.Blaze.Html5.Attributes as A
 import qualified Text.Blaze.Html.Renderer.Text as BT
 import Text.Blaze.Html hiding(contents)
 import Data.Monoid
-import Data.Foldable (foldMap, toList)
+#if !(MIN_VERSION_base(4,8,0))
+import Data.Foldable (foldMap)
+#endif
+import Data.Foldable (toList)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.List (intersperse)

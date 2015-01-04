@@ -41,7 +41,7 @@ library
                      Cheapskate.Inlines
                      Cheapskate.ParserCombinators
                      Paths_cheapskate
-  build-depends:     base >=4.4 && <4.8,
+  build-depends:     base >=4.4 && <4.9,
                      containers >=0.4 && <0.6,
                      mtl >=2.1 && <2.3,
                      text >= 0.9 && < 1.3,
@@ -57,7 +57,7 @@ library
 executable cheapskate
   main-is:           main.hs
   hs-source-dirs:    bin
-  build-depends:     base >=4.4 && <4.8,
+  build-depends:     base >=4.4 && <4.9,
                      cheapskate,
                      bytestring,
                      blaze-html >=0.6 && < 0.8,

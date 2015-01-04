@@ -245,7 +245,7 @@ pUri scheme = do
   guard $ not $ T.null x
   let (rawuri, endingpunct) =
         case T.last x of
-             c | c `elem` ".;?!:," ->
+             c | c `elem` (".;?!:," :: String) ->
                (scheme <> ":" <> T.init x, singleton (Str (T.singleton c)))
              _ -> (scheme <> ":" <> x, mempty)
   return $ autoLink rawuri <> endingpunct

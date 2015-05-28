@@ -1,5 +1,5 @@
 name:                cheapskate
-version:             0.1.0.3
+version:             0.1.0.4
 synopsis:            Experimental markdown processor.
 description:         This is an experimental Markdown processor in pure
                      Haskell.  It aims to process Markdown efficiently and in
@@ -45,7 +45,7 @@ library
                      containers >=0.4 && <0.6,
                      mtl >=2.1 && <2.3,
                      text >= 0.9 && < 1.3,
-                     blaze-html >=0.6 && < 0.9,
+                     blaze-html >=0.6 && < 0.10,
                      xss-sanitize >= 0.3 && < 0.4,
                      data-default >= 0.5 && < 0.6,
                      syb,
@@ -60,7 +60,7 @@ executable cheapskate
   build-depends:     base >=4.4 && <4.9,
                      cheapskate,
                      bytestring,
-                     blaze-html >=0.6 && < 0.9,
+                     blaze-html >=0.6 && < 0.10,
                      text >= 0.9 && < 1.3
   default-language:  Haskell2010
   ghc-options:       -Wall -fno-warn-unused-do-bind

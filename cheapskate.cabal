@@ -52,7 +52,6 @@ library
                      uniplate >= 1.6 && < 1.7
   default-language:  Haskell2010
   ghc-options:       -Wall -fno-warn-unused-do-bind
-  ghc-prof-options:  -auto-all -caf-all -rtsopts
 
 executable cheapskate
   main-is:           main.hs

@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
+
 module Cheapskate.Util (
     joinLines
   , tabFilter
@@ -21,7 +23,9 @@ module Cheapskate.Util (
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Char
+#if ! MIN_VERSION_base(4,8,0)
 import Control.Applicative
+#endif
 import Cheapskate.ParserCombinators
 
 -- Utility functions.

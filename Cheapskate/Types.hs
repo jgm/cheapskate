@@ -1,10 +1,20 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+#if !(MIN_VERSION_base(4,4,0))
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE StandaloneDeriving #-}
+#endif
 module Cheapskate.Types where
 import Data.Sequence (Seq)
 import Data.Default
 import Data.Text (Text)
 import qualified Data.Map as M
 import Data.Data
+
+#if !(MIN_VERSION_base(4,4,0))
+import Control.DeepSeq (NFData(..))
+import GHC.Generics (Generic)
+#endif
 
 -- | Structured representation of a document.  The 'Options' affect
 -- how the document is rendered by `toHtml`.
@@ -27,6 +37,7 @@ data CodeAttr = CodeAttr { codeLang :: Text, codeInfo :: Text }
               deriving (Show, Data, Typeable)
 
 data ListType = Bullet Char | Numbered NumWrapper Int deriving (Eq,Show,Data,Typeable)
+
 data NumWrapper = PeriodFollowing | ParenFollowing deriving (Eq,Show,Data,Typeable)
 
 -- | Simple representation of HTML tag.
@@ -71,3 +82,29 @@ instance Default Options where
         , debug = False
         }
 
+
+#if !(MIN_VERSION_base(4,4,0))
+deriving instance Generic Doc
+instance NFData Doc
+
+deriving instance Generic Block
+instance NFData Block
+
+deriving instance Generic CodeAttr
+instance NFData CodeAttr
+
+deriving instance Generic ListType
+instance NFData ListType
+
+deriving instance Generic NumWrapper
+instance NFData NumWrapper
+
+deriving instance Generic HtmlTagType
+instance NFData HtmlTagType
+
+deriving instance Generic Inline
+instance NFData Inline
+
+deriving instance Generic Options
+instance NFData Options
+#endif

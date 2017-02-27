@@ -1,6 +1,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 #if !(MIN_VERSION_base(4,4,0))
+-- Both of these extensions are only used when we're deriving
+-- Generic and NFData instances, which we only do if the
+-- GHC version is at least 7.2.
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
 #endif
@@ -84,6 +87,9 @@ instance Default Options where
 
 
 #if !(MIN_VERSION_base(4,4,0))
+-- The Generic typeclass and the ability to derive it has only
+-- existed since GHC version 7.2, base version 4.4, so we guard
+-- these instance definitions with CPP.
 deriving instance Generic Doc
 instance NFData Doc
 

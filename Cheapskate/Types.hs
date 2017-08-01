@@ -1,23 +1,16 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-#if !(MIN_VERSION_base(4,4,0))
--- Both of these extensions are only used when we're deriving
--- Generic and NFData instances, which we only do if the
--- GHC version is at least 7.2.
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
-#endif
+
 module Cheapskate.Types where
 import Data.Sequence (Seq)
 import Data.Default
 import Data.Text (Text)
 import qualified Data.Map as M
 import Data.Data
-
-#if !(MIN_VERSION_base(4,4,0))
 import Control.DeepSeq (NFData(..))
 import GHC.Generics (Generic)
-#endif
 
 -- | Structured representation of a document.  The 'Options' affect
 -- how the document is rendered by `toHtml`.
@@ -85,11 +78,6 @@ instance Default Options where
         , debug = False
         }
 
-
-#if !(MIN_VERSION_base(4,4,0))
--- The Generic typeclass and the ability to derive it has only
--- existed since GHC version 7.2, base version 4.4, so we guard
--- these instance definitions with CPP.
 deriving instance Generic Doc
 instance NFData Doc
 
@@ -113,4 +101,3 @@ instance NFData Inline
 
 deriving instance Generic Options
 instance NFData Options
-#endif

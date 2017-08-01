@@ -1,3 +1,10 @@
+cheapskate 0.1.0.6 (01 Aug 2017)
+
+  * Use -auto-exported instead of -auto-all for prof options.
+  * Add 'dingus' flag and make cheapskate-dingus deps conditional
+    (MarcelineVQ).  Previously cheapskate would pull in unneeded
+    dependencies when built with Cabal < 1.24.
+
 cheapskate 0.1.0.5 (22 Apr 2016)
 
   * Bump base to allow GHC 8 (Leif Warner).

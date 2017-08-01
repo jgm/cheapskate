@@ -1,5 +1,7 @@
-cheapskate 0.1.0.6 (01 Aug 2017)
+cheapskate 0.1.1 (01 Aug 2017)
 
+  * Added NFData and Generic instances for basic types
+    (aisamanra).
   * Use -auto-exported instead of -auto-all for prof options.
   * Add 'dingus' flag and make cheapskate-dingus deps conditional
     (MarcelineVQ).  Previously cheapskate would pull in unneeded

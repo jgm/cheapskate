@@ -1,5 +1,5 @@
 name:                cheapskate
-version:             0.1.0.5
+version:             0.1.0.6
 synopsis:            Experimental markdown processor.
 description:         This is an experimental Markdown processor in pure
                      Haskell.  It aims to process Markdown efficiently and in
@@ -68,8 +68,9 @@ executable cheapskate
 executable cheapskate-dingus
   main-is:           cheapskate-dingus.hs
   hs-source-dirs:    bin
-  build-depends:     base, aeson, cheapskate, blaze-html,
-                     text, wai-extra, wai >= 0.3, http-types
+  if flag(dingus)
+    build-depends:     base, aeson, cheapskate, blaze-html,
+                       text, wai-extra, wai >= 0.3, http-types
   default-language:  Haskell2010
   if flag(dingus)
     Buildable:       True

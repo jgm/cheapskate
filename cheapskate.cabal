@@ -64,7 +64,6 @@ executable cheapskate
                      text >= 0.9 && < 1.3
   default-language:  Haskell2010
   ghc-options:       -Wall -fno-warn-unused-do-bind
-  ghc-prof-options:  -auto-exported -rtsopts
 
 executable cheapskate-dingus
   main-is:           cheapskate-dingus.hs
@@ -78,4 +77,3 @@ executable cheapskate-dingus
   else
     Buildable:       False
   ghc-options:       -Wall -fno-warn-unused-do-bind
-  ghc-prof-options:  -auto-exported -rtsopts

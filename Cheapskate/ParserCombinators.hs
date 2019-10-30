@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Cheapskate.ParserCombinators (
     Position(..)
   , Parser
@@ -35,6 +36,7 @@ import Prelude hiding (takeWhile)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Control.Monad
+import qualified Control.Monad.Fail as Fail
 import Control.Applicative
 import qualified Data.Set as Set
 
@@ -107,9 +109,14 @@ instance Alternative Parser where
   {-# INLINE empty #-}
   {-# INLINE (<|>) #-}
 
+instance Fail.MonadFail Parser where
+  fail e = Parser $ \st -> Left $ ParseError (position st) e
+
 instance Monad Parser where
   return x = Parser $ \st -> Right (st, x)
-  fail e = Parser $ \st -> Left $ ParseError (position st) e
+#if !MIN_VERSION_base(4,13,0)
+  fail = Fail.fail
+#endif
   p >>= g = Parser $ \st ->
     case evalParser p st of
          Left e        -> Left e

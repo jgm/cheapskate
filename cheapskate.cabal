@@ -1,5 +1,5 @@
 name:                cheapskate
-version:             0.1.1.1
+version:             0.1.1.2
 synopsis:            Experimental markdown processor.
 description:         This is an experimental Markdown processor in pure
                      Haskell.  It aims to process Markdown efficiently and in

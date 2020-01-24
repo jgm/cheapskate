@@ -64,6 +64,7 @@ executable cheapskate
                      text >= 0.9 && < 1.3
   default-language:  Haskell2010
   ghc-options:       -Wall -fno-warn-unused-do-bind
+  other-modules:     Paths_cheapskate
 
 executable cheapskate-dingus
   main-is:           cheapskate-dingus.hs

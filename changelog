@@ -1,7 +1,7 @@
-cheapskate 0.1.1.1 (24 Jan 2020)
+cheapskate 0.1.1.2 (24 Jan 2020)
 
   * Add Paths_cheapskate to other-modules
-  * Support base 4.13 (Fumiaki Kinoshita)
+  * Support base 4.13 (Fumiaki Kinoshita) (#33).
 
 cheapskate 0.1.1.1 (05 Nov 2018)
 

@@ -1,7 +1,7 @@
 # Cheapskate
 
-*Note: This library is unmaintained (by me anyway).  I recommend
-using cmark.*
+**Note: This library is unmaintained (by me anyway).  I recommend
+using [commonmark](https://github.com/jgm/commonmark-hs).**
 
 This is an experimental Markdown processor in pure Haskell.  (A cheapskate is
 always in search of the best markdown.) It aims to process Markdown efficiently
